@@ -11,8 +11,22 @@ from datetime import datetime, date, timedelta
 from calendar import monthcalendar, month_name
 import pytz
 
+
+def check_user_membership(update, context):
+    """Verifica se l'utente è membro del gruppo privato"""
+    PRIVATE_GROUP_ID = '-1001537602251'  # ID come stringa
+    user_id = update.effective_user.id
+    try:
+        member = context.bot.get_chat_member(PRIVATE_GROUP_ID, user_id)
+        #print(f"Membership info: {member}")
+        return member.status in ['member', 'administrator', 'creator']
+    except Exception as e:
+        print(f"Error checking membership: {e}")
+        #print(f"User ID: {user_id}, Group ID: {PRIVATE_GROUP_ID}")
+        return False
+
 # Stati della conversazione
-(CHOOSING, NAME, EMAIL, PHONE, BIRTH_DATE, MEDICAL, HIKE_CHOICE, EQUIPMENT, 
+(CHOOSING, NAME, EMAIL, PHONE, BIRTH_DATE, MEDICAL, HIKE_CHOICE, EQUIPMENT,
  CAR_SHARE, MUNICIPIO, ELSEWHERE, NOTES, IMPORTANT_NOTES) = range(13)
 
 # Definisci il fuso orario di Roma
@@ -24,17 +38,17 @@ def setup_google_sheets():
              'https://www.googleapis.com/auth/drive']
     credentials = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
     client = gspread.authorize(credentials)
-    
+
     # Open both sheets
-    sheet_responses = client.open_by_key('[INSERT GOOGLE SHEET ID]').worksheet('Registrazioni')
-    sheet_hikes = client.open_by_key('[INSERT GOOGLE SHEET ID]').worksheet('ProssimeUscite')
+    sheet_responses = client.open_by_key('1EGKDWwjoscQ-q0QNgIQBY2q_nOD7z4C_AYArdQQ_-gY').worksheet('Registrazioni')
+    sheet_hikes = client.open_by_key('1EGKDWwjoscQ-q0QNgIQBY2q_nOD7z4C_AYArdQQ_-gY').worksheet('ProssimeUscite')
     return sheet_responses, sheet_hikes
 
 def get_available_hikes(sheet_hikes, sheet_responses, user_id=None):
     """Gets available hikes from ProssimeUscite sheet and counts current participants"""
     # Leggi tutti gli hike
     hikes_data = sheet_hikes.get_all_records()
-    
+
     # Leggi tutte le registrazioni per contare i partecipanti
     registrations = sheet_responses.get_all_records(expected_headers=[
         'Timestamp_risposte',
@@ -50,7 +64,7 @@ def get_available_hikes(sheet_hikes, sheet_responses, user_id=None):
         'What municipio do you live in?',
         'Something important we need to know?'
     ])
-    
+
     # Conta i partecipanti per ogni hike
     participants_count = {}
     user_bookings = set()
@@ -64,18 +78,18 @@ def get_available_hikes(sheet_hikes, sheet_responses, user_id=None):
         for hike in hikes:
             if hike:  # Ignora stringhe vuote
                 participants_count[hike] = participants_count.get(hike, 0) + 1
-    
+
     # Today's date and 2 months limit
     today = datetime.now(rome_tz).date()
     min_date = today + timedelta(days=2)
     max_date = today + timedelta(days=60)
-    
+
     available_hikes = []
-    
+
     for hike in hikes_data:
         # Convert date string to date object
         hike_date = datetime.strptime(hike['data'], '%d/%m/%Y').date()
-        
+
         # Check if hike is within valid date range
         if min_date <= hike_date <= max_date:
             hike_identifier = f"{hike_date.strftime('%d/%m/%Y')} - {hike['hike']}"
@@ -88,30 +102,30 @@ def get_available_hikes(sheet_hikes, sheet_responses, user_id=None):
                     'max_participants': int(hike['max_partecipanti']),
                     'current_participants': participants_count.get(hike_identifier, 0)
                 })
-    
+
     # Sort by date
     return sorted(available_hikes, key=lambda x: x['date'])
 
 def create_hikes_keyboard(hikes, context):
     """Creates keyboard with available hikes"""
     keyboard = []
-    
+
     for idx, hike in enumerate(hikes):
         available_spots = hike['max_participants'] - hike['current_participants']
         date_str = hike['date'].strftime('%d/%m/%Y')
-        
+
         # Prima riga: solo la data
         keyboard.append([InlineKeyboardButton(
             f"🗓 {date_str}",
             callback_data=f'info_hike{idx}_date'
         )])
-        
+
         # Seconda riga: nome dell'hike
         keyboard.append([InlineKeyboardButton(
             f"🏃 {hike['name']}",
             callback_data=f'info_hike{idx}_name'
         )])
-        
+
         # Terza riga: posti disponibili
         if available_spots > 1:
             spots_text = f"🟢 {available_spots}/{hike['max_participants']} spots available"
@@ -119,21 +133,21 @@ def create_hikes_keyboard(hikes, context):
             spots_text = f"🔴 Last spot available!"
         else:
             spots_text = "⚫ Fully booked"
-        
+
         keyboard.append([InlineKeyboardButton(
             spots_text,
             callback_data=f'info_hike{idx}_spots'
         )])
-        
+
         # Quarta riga: bottone di selezione (solo se ci sono posti disponibili)
         if available_spots > 0:
             select_text = "✓ Select" if idx not in context.user_data.get('selected_hikes', []) else "✓ Selected!"
             keyboard.append([InlineKeyboardButton(select_text, callback_data=f'select_hike{idx}')])
-        
+
         # Separatore tra gli hike
         if idx < len(hikes) - 1:
             keyboard.append([InlineKeyboardButton("─────────", callback_data='ignore')])
-    
+
     # Bottone di conferma alla fine
     keyboard.append([InlineKeyboardButton("✅ Confirm selection", callback_data='confirm_hikes')])
     return InlineKeyboardMarkup(keyboard)
@@ -146,7 +160,7 @@ def create_year_selector():
         row = []
         for year in decades[i:i+2]:
             row.append(InlineKeyboardButton(
-                f"{year}s", 
+                f"{year}s",
                 callback_data=f'decade_{year}'
             ))
         keyboard.append(row)
@@ -159,7 +173,7 @@ def create_year_buttons(decade):
         row = []
         for year in years[i:i+3]:
             row.append(InlineKeyboardButton(
-                str(year), 
+                str(year),
                 callback_data=f'year_{year}'
             ))
         keyboard.append(row)
@@ -171,7 +185,7 @@ def create_month_buttons(year):
         row = []
         for month in range(i, min(i + 3, 13)):
             row.append(InlineKeyboardButton(
-                month_name[month], 
+                month_name[month],
                 callback_data=f'month_{year}_{month}'
             ))
         keyboard.append(row)
@@ -179,24 +193,24 @@ def create_month_buttons(year):
 
 def create_calendar(year, month):
     keyboard = []
-    
+
     keyboard.append([
         InlineKeyboardButton("<<", callback_data=f'year_{year-1}_{month}'),
         InlineKeyboardButton(f"{year}", callback_data=f'ignore'),
         InlineKeyboardButton(">>", callback_data=f'year_{year+1}_{month}')
     ])
-    
+
     keyboard.append([
         InlineKeyboardButton("<<", callback_data=f'month_{year}_{month-1}'),
         InlineKeyboardButton(f"{month_name[month]}", callback_data=f'ignore'),
         InlineKeyboardButton(">>", callback_data=f'month_{year}_{month+1}')
     ])
-    
+
     keyboard.append([
-        InlineKeyboardButton(day, callback_data='ignore') 
+        InlineKeyboardButton(day, callback_data='ignore')
         for day in ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
     ])
-    
+
     for week in monthcalendar(year, month):
         row = []
         for day in week:
@@ -204,24 +218,31 @@ def create_calendar(year, month):
                 row.append(InlineKeyboardButton(" ", callback_data='ignore'))
             else:
                 row.append(InlineKeyboardButton(
-                    str(day), 
+                    str(day),
                     callback_data=f'date_{year}_{month}_{day}'
                 ))
         keyboard.append(row)
-    
+
     return InlineKeyboardMarkup(keyboard)
 
 ## PARTE 2 - Funzioni menu principale
 def start(update, context):
+    if not check_user_membership(update, context):
+        update.message.reply_text(
+            "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
+            "Request access to the group and try again!"
+        )
+        return ConversationHandler.END
+
     context.user_data.clear()
-    
+
     keyboard = [
         [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
         [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
         [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     update.message.reply_text(
         "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
         "How can I assist you?",
@@ -242,26 +263,33 @@ def check_future_hikes_availability(query, context, user_id):
         context.bot_data['sheet_responses'],
         user_id
     )
-    
+
     if not available_hikes:
         query.edit_message_text(
             "There are no available hikes at the moment.\n"
             "Use /start to go back to the home menu."
         )
         return None
-    
+
     return available_hikes
 
 def handle_menu_choice(update, context):
     query = update.callback_query
     query.answer()
+
+    if not check_user_membership(update, context):
+        query.edit_message_text(
+            "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
+            "Request access to the group and try again!"
+        )
+        return ConversationHandler.END
     
     if query.data == 'signup':
         # Controlla disponibilità hike prima di iniziare il questionario
         available_hikes = check_future_hikes_availability(query, context, query.from_user.id)
         if not available_hikes:
             return CHOOSING
-        
+
         # Salva gli hike disponibili per usarli più tardi
         context.user_data['available_hikes'] = available_hikes
         query.edit_message_text("👋 Name and surname?")
@@ -279,7 +307,7 @@ def handle_menu_choice(update, context):
             [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         query.edit_message_text(
             "Here are some useful links:",
             reply_markup=reply_markup
@@ -292,7 +320,7 @@ def handle_menu_choice(update, context):
             [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         query.edit_message_text(
             "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
             "How can I assist you?",
@@ -307,7 +335,7 @@ def get_user_hikes(sheet_responses, user_id):
     registrations = sheet_responses.get_all_records()
     user_hikes = []
     today = datetime.now(rome_tz).date()
-    
+
     for reg in registrations:
         if str(reg['Telegram_ID']) == str(user_id):
             hikes = reg['Choose the hike'].split('; ')
@@ -323,7 +351,7 @@ def get_user_hikes(sheet_responses, user_id):
                             'name': name,
                             'car_shared': car_shared
                         })
-    
+
     # Ordina per data
     return sorted(user_hikes, key=lambda x: x['date'])
 
@@ -337,38 +365,38 @@ def show_my_hikes(update, context):
         message = update.message
 
     hikes = get_user_hikes(context.bot_data['sheet_responses'], user_id)
-    
+
     if not hikes:
         message.reply_text(
             "You are not registered for any hikes yet.\n"
             "Use /start to go back to the home menu."
         )
         return ConversationHandler.END
-    
+
     context.user_data['my_hikes'] = hikes
     context.user_data['current_hike_index'] = 0
-    
+
     return show_hike_details(update, context)
 
 def handle_hike_navigation(update, context):
     query = update.callback_query
     query.answer()
-    
+
     if query.data == 'next_hike':
         context.user_data['current_hike_index'] += 1
     elif query.data == 'prev_hike':
         context.user_data['current_hike_index'] -= 1
-    
+
     return show_hike_details(query, context)
 
 def show_hike_details(update, context):
     hikes = context.user_data['my_hikes']
     current_index = context.user_data['current_hike_index']
     hike = hikes[current_index]
-    
+
     # Prepara i bottoni di navigazione
     keyboard = []
-    
+
     # Bottoni precedente/successivo
     nav_buttons = []
     if current_index > 0:
@@ -377,12 +405,15 @@ def show_hike_details(update, context):
         nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data='next_hike'))
     if nav_buttons:
         keyboard.append(nav_buttons)
-    
+
+    # Bottone per la cancellazione
+    keyboard.append([InlineKeyboardButton("❌ Cancel registration", callback_data=f'cancel_hike_{current_index}')])
+
     # Bottone per tornare al menu
     keyboard.append([InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')])
-    
+
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     # Prepara il messaggio
     message_text = (
         f"🗓 *Date:* {hike['date'].strftime('%d/%m/%Y')}\n"
@@ -390,7 +421,7 @@ def show_hike_details(update, context):
         f"🚗 *Car sharing:* {hike['car_shared']}\n\n"
         f"Hike {current_index + 1} of {len(hikes)}"
     )
-    
+
     if isinstance(update, CallbackQuery):
         update.edit_message_text(
             text=message_text,
@@ -403,11 +434,91 @@ def show_hike_details(update, context):
             reply_markup=reply_markup,
             parse_mode='Markdown'
         )
-    
+
     return CHOOSING
+
+def handle_cancel_request(update, context):
+    """Gestisce la richiesta iniziale di cancellazione"""
+    query = update.callback_query
+    query.answer()
+    
+    # Ottieni l'indice dell'hike da cancellare
+    hike_index = int(query.data.split('_')[2])
+    hike = context.user_data['my_hikes'][hike_index]
+    context.user_data['hike_to_cancel'] = hike  # Salva l'hike da cancellare
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("Yes ✅", callback_data='confirm_cancel'),
+            InlineKeyboardButton("No ❌", callback_data='abort_cancel')
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    query.edit_message_text(
+        f"Are you sure you want to cancel your registration for:\n\n"
+        f"🗓 {hike['date'].strftime('%d/%m/%Y')}\n"
+        f"🏃 {hike['name']}?",
+        reply_markup=reply_markup
+    )
+    return CHOOSING
+
+def handle_cancel_confirmation(update, context):
+    """Gestisce la conferma o l'annullamento della cancellazione"""
+    query = update.callback_query
+    query.answer()
+    
+    if query.data == 'abort_cancel':
+        # Torna alla visualizzazione dell'hike
+        return show_hike_details(query, context)
+    
+    # Procedi con la cancellazione
+    hike_to_cancel = context.user_data['hike_to_cancel']
+    sheet_responses = context.bot_data['sheet_responses']
+    user_id = query.from_user.id
+    
+    # Trova la riga dell'utente
+    registrations = sheet_responses.get_all_records()
+    row_number = None
+    current_hikes = []
+    
+    for idx, reg in enumerate(registrations, start=2):  # start=2 perché la prima riga sono le intestazioni
+        if str(reg['Telegram_ID']) == str(user_id):
+            row_number = idx
+            current_hikes = reg['Choose the hike'].split('; ')
+            break
+    
+    if row_number:
+        # Rimuovi l'hike dalla lista
+        hike_to_remove = f"{hike_to_cancel['date'].strftime('%d/%m/%Y')} - {hike_to_cancel['name']}"
+        new_hikes = [h for h in current_hikes if h and h != hike_to_remove]
+        
+        # Aggiorna il foglio
+        sheet_responses.update_cell(row_number, 8, '; '.join(new_hikes))  # 8 è la colonna 'Choose the hike'
+        
+        # Mostra messaggio di conferma
+        query.edit_message_text(
+            "✅ Registration successfully cancelled.\n"
+            "Use /start to go back to the home menu."
+        )
+        return ConversationHandler.END
+    
+    # In caso di errore
+    query.edit_message_text(
+        "❌ Something went wrong.\n"
+        "Use /start to go back to the home menu."
+    )
+    return ConversationHandler.END
 
 ## PARTE 4 - Gestione delle domande del questionario
 def handle_invalid_message(update, context):
+    if not check_user_membership(update, context):
+        update.message.reply_text(
+            "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
+            "Request access to the group and try again!"
+        )
+        return ConversationHandler.END
+    
     keyboard = [
         [
             InlineKeyboardButton("Yes ✅", callback_data='restart_yes'),
@@ -415,7 +526,7 @@ def handle_invalid_message(update, context):
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     update.message.reply_text(
         "❓ Do you want to start a new form?",
         reply_markup=reply_markup
@@ -424,7 +535,7 @@ def handle_invalid_message(update, context):
 def handle_restart_choice(update, context):
     query = update.callback_query
     query.answer()
-    
+
     if query.data == 'restart_yes':
         context.user_data.clear()
         query.message.reply_text("👋 Name and surname?")
@@ -456,10 +567,10 @@ def save_phone(update, context):
 def handle_calendar(update, context):
     query = update.callback_query
     query.answer()
-    
+
     data = query.data.split('_')
     action = data[0]
-    
+
     if action == 'decade':
         decade = int(data[1])
         query.edit_message_text(
@@ -467,7 +578,7 @@ def handle_calendar(update, context):
             reply_markup=create_year_buttons(decade)
         )
         return BIRTH_DATE
-        
+
     elif action == 'year':
         year = int(data[1])
         context.user_data['birth_year'] = year
@@ -476,7 +587,7 @@ def handle_calendar(update, context):
             reply_markup=create_month_buttons(year)
         )
         return BIRTH_DATE
-        
+
     elif action == 'month':
         year = int(data[1])
         month = int(data[2])
@@ -485,17 +596,17 @@ def handle_calendar(update, context):
             reply_markup=create_calendar(year, month)
         )
         return BIRTH_DATE
-        
+
     elif action == 'date':
         year = int(data[1])
         month = int(data[2])
         day = int(data[3])
-        
+
         selected_date = f"{day:02d}/{month:02d}/{year}"
         context.user_data['birth_date'] = selected_date
-        
+
         query.edit_message_text(f"📅 Selected birth date: {selected_date}")
-        
+
         context.bot.send_message(
             chat_id=query.message.chat_id,
             text="🏥 Medical conditions\n"
@@ -513,7 +624,7 @@ def save_medical(update, context):
     # Gli hike disponibili sono già stati salvati in context.user_data['available_hikes']
     available_hikes = context.user_data['available_hikes']
     reply_markup = create_hikes_keyboard(available_hikes, context)
-    
+
     update.message.reply_text(
         "🎯 Choose the hike(s) you want to participate in.\n"
         "Click to select/deselect a hike.\n"
@@ -525,42 +636,42 @@ def save_medical(update, context):
 def handle_hike(update, context):
     query = update.callback_query
     query.answer()
-    
+
     # Ignora i click sulle righe informative e sul separatore
     if query.data.startswith('info_hike') or query.data == 'ignore':
         return HIKE_CHOICE
-    
+
     if query.data.startswith('select_hike'):
         hike_idx = int(query.data.replace('select_hike', ''))
         selected_hikes = context.user_data.get('selected_hikes', [])
         available_hikes = context.user_data['available_hikes']
-        
+
         if hike_idx in selected_hikes:
             selected_hikes.remove(hike_idx)
             query.answer("Hike deselected")
         else:
             selected_hikes.append(hike_idx)
             query.answer("Hike selected")
-            
+
         context.user_data['selected_hikes'] = selected_hikes
-        
+
         # Aggiorna la keyboard con le nuove selezioni
         reply_markup = create_hikes_keyboard(available_hikes, context)
         query.edit_message_reply_markup(reply_markup=reply_markup)
         return HIKE_CHOICE
-        
+
     elif query.data == 'confirm_hikes':
         selected_hikes = context.user_data.get('selected_hikes', [])
         if not selected_hikes:
             query.answer("❗ Please select at least one hike!", show_alert=True)
             return HIKE_CHOICE
-        
+
         # Store selected hikes details
         available_hikes = context.user_data['available_hikes']
         context.user_data['selected_hikes_details'] = [
             available_hikes[idx] for idx in selected_hikes
         ]
-        
+
         # Next question
         keyboard = [
             [
@@ -569,7 +680,7 @@ def handle_hike(update, context):
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         context.bot.send_message(
             chat_id=query.message.chat_id,
             text="🎒 Do you have all the necessary equipment?\n"
@@ -585,9 +696,9 @@ def handle_hike(update, context):
 def handle_equipment(update, context):
     query = update.callback_query
     query.answer()
-    
+
     context.user_data['equipment'] = 'Yes' if query.data == 'yes_eq' else 'No'
-    
+
     keyboard = [
         [
             InlineKeyboardButton("Yes ✅", callback_data='yes_car'),
@@ -595,7 +706,7 @@ def handle_equipment(update, context):
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     context.bot.send_message(
         chat_id=query.message.chat_id,
         text="🚗 Do you have a car you can share?\n"
@@ -609,16 +720,16 @@ def handle_equipment(update, context):
 def handle_car_share(update, context):
     query = update.callback_query
     query.answer()
-    
+
     context.user_data['car_share'] = 'Yes' if query.data == 'yes_car' else 'No'
-    
+
     keyboard = []
     for i in range(1, 16):
         keyboard.append([InlineKeyboardButton(f"Municipio {i}", callback_data=f'mun_{i}')])
     keyboard.append([InlineKeyboardButton("Elsewhere 🌍", callback_data='elsewhere')])
-    
+
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     context.bot.send_message(
         chat_id=query.message.chat_id,
         text="📍 What *municipio* do you live in?\n"
@@ -631,11 +742,11 @@ def handle_car_share(update, context):
 def handle_municipio(update, context):
     query = update.callback_query
     query.answer()
-    
+
     if query.data == 'elsewhere':
         query.edit_message_text("🌍 Where?")
         return ELSEWHERE
-    
+
     context.user_data['municipio'] = query.data
     return ask_notes(update, context, query.message.chat_id)
 
@@ -655,7 +766,7 @@ def ask_notes(update, context, chat_id):
 ## PARTE 7 - Funzioni finali e main()
 def save_notes(update, context):
     context.user_data['notes'] = update.message.text
-    
+
     keyboard = [
         [
             InlineKeyboardButton("Accept ✅", callback_data='accept'),
@@ -663,7 +774,7 @@ def save_notes(update, context):
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     update.message.reply_text(
         "⚠️ *IMPORTANT NOTES*\n"
         "Please note that you may be excluded from the event if all available spots are taken.\n"
@@ -678,19 +789,19 @@ def save_notes(update, context):
 def handle_final_choice(update, context):
     query = update.callback_query
     query.answer()
-    
+
     if query.data == 'accept':
         # Get fresh count of participants before saving
         available_hikes = get_available_hikes(
             context.bot_data['sheet_hikes'],
             context.bot_data['sheet_responses']
         )
-        
+
         # Check if selected hikes are still available
         selected_hikes = context.user_data.get('selected_hikes_details', [])
         for selected_hike in selected_hikes:
             for available_hike in available_hikes:
-                if (selected_hike['date'] == available_hike['date'] and 
+                if (selected_hike['date'] == available_hike['date'] and
                     selected_hike['name'] == available_hike['name']):
                     if available_hike['current_participants'] >= available_hike['max_participants']:
                         query.edit_message_text(
@@ -705,13 +816,13 @@ def handle_final_choice(update, context):
         data = context.user_data
         timestamp = datetime.now(rome_tz).strftime("%Y-%m-%d %H:%M:%S")
         telegram_id = str(query.from_user.id)  # Aggiungo l'ID Telegram
-        
+
         # Format selected hikes for saving
         hikes_text = '; '.join([
             f"{hike['date'].strftime('%d/%m/%Y')} - {hike['name']}"
             for hike in selected_hikes
         ])
-        
+
         # Save to sheet
         sheet_responses.append_row([
             timestamp,  # Timestamp_risposte
@@ -727,7 +838,7 @@ def handle_final_choice(update, context):
             data.get('municipio', ''),  # What municipio do you live in?
             data.get('notes', '')  # Something important we need to know?
         ])
-        
+
         query.edit_message_text(
             "✅ Thanks for signing up for the next hike.\n"
             "You can use /start to go back to the home menu."
@@ -738,7 +849,7 @@ def handle_final_choice(update, context):
             "Thank you for your time.\n"
             "You can use /start to go back to the home menu."
         )
-    
+
     return ConversationHandler.END
 
 def cancel(update, context):
@@ -750,16 +861,16 @@ def cancel(update, context):
     return ConversationHandler.END
 
 def main():
-    TOKEN = '[INSERT_YOUR_TOKEN]'
-    
+    TOKEN = '8102799028:AAGpwcdzQ0WigeV_abM2a8yR__bAlJXhdZM'
+
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
-    
+
     # Setup sheets
     sheet_responses, sheet_hikes = setup_google_sheets()
     dp.bot_data['sheet_responses'] = sheet_responses
     dp.bot_data['sheet_hikes'] = sheet_hikes
-    
+
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler('start', start),
@@ -770,7 +881,9 @@ def main():
             CHOOSING: [
                 CommandHandler('start', start),
                 CallbackQueryHandler(handle_menu_choice, pattern='^(signup|myhikes|links|back_to_menu)$'),
-                CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)$')
+                CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)$'),
+                CallbackQueryHandler(handle_cancel_request, pattern='^cancel_hike_\d+$'),
+                CallbackQueryHandler(handle_cancel_confirmation, pattern='^(confirm_cancel|abort_cancel)$')
             ],
             NAME: [
                 CommandHandler('start', start),
@@ -823,11 +936,11 @@ def main():
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
-    
+
     dp.add_handler(conv_handler)
-    
+
     updater.start_polling()
-    
+
     try:
         print("🚀 Bot started! Press CTRL+C to stop.")
         while True:
