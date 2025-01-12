@@ -2,6 +2,10 @@
 !pip install gspread oauth2client
 !pip install pytz
 
+#upload service account credential for google sheet api
+from google.colab import files
+uploaded = files.upload()  # Carica il file credentials.json
+
 ## PARTE 1 - IMPORT E SETUP INIZIALE
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler, CallbackQueryHandler
