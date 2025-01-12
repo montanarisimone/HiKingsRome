@@ -12,13 +12,38 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Conve
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, date, timedelta
+from datetime import time as datetime_time
+import time
 from calendar import monthcalendar, month_name
 import pytz
+import requests
+import os
+from collections import defaultdict
+
+
+class RateLimiter:
+    def __init__(self, max_requests=5, time_window=60):  # 5 richieste per minuto
+        self.requests = defaultdict(list)
+        self.max_requests = max_requests
+        self.time_window = time_window
+
+    def is_allowed(self, user_id):
+        now = datetime.now()
+        # Rimuovi richieste vecchie
+        self.requests[user_id] = [
+            req_time for req_time in self.requests[user_id]
+            if now - req_time < timedelta(seconds=self.time_window)
+        ]
+        # Controlla se l'utente può fare una nuova richiesta
+        if len(self.requests[user_id]) < self.max_requests:
+            self.requests[user_id].append(now)
+            return True
+        return False
 
 
 def check_user_membership(update, context):
     """Verifica se l'utente è membro del gruppo privato"""
-    PRIVATE_GROUP_ID = '-1001537602251'  # ID come stringa
+    PRIVATE_GROUP_ID = '-xxxxxxxxxx'  # ID come stringa
     user_id = update.effective_user.id
     try:
         member = context.bot.get_chat_member(PRIVATE_GROUP_ID, user_id)
@@ -31,12 +56,12 @@ def check_user_membership(update, context):
 
 # Stati della conversazione
 (CHOOSING, NAME, EMAIL, PHONE, BIRTH_DATE, MEDICAL, HIKE_CHOICE, EQUIPMENT,
- CAR_SHARE, MUNICIPIO, ELSEWHERE, NOTES, IMPORTANT_NOTES) = range(13)
+ CAR_SHARE, MUNICIPIO, ELSEWHERE, NOTES, IMPORTANT_NOTES, REMINDER_CHOICE) = range(14)
 
 # Definisci il fuso orario di Roma
 rome_tz = pytz.timezone('Europe/Rome')
 
-# Funzioni utilità
+## FUNZIONI UTILITY
 def setup_google_sheets():
     scope = ['https://spreadsheets.google.com/feeds',
              'https://www.googleapis.com/auth/drive']
@@ -44,8 +69,8 @@ def setup_google_sheets():
     client = gspread.authorize(credentials)
 
     # Open both sheets
-    sheet_responses = client.open_by_key('1EGKDWwjoscQ-q0QNgIQBY2q_nOD7z4C_AYArdQQ_-gY').worksheet('Registrazioni')
-    sheet_hikes = client.open_by_key('1EGKDWwjoscQ-q0QNgIQBY2q_nOD7z4C_AYArdQQ_-gY').worksheet('ProssimeUscite')
+    sheet_responses = client.open_by_key('xxxxxxxxxx').worksheet('Registrazioni')
+    sheet_hikes = client.open_by_key('xxxxxxxxxx').worksheet('ProssimeUscite')
     return sheet_responses, sheet_hikes
 
 def get_available_hikes(sheet_hikes, sheet_responses, user_id=None):
@@ -66,7 +91,8 @@ def get_available_hikes(sheet_hikes, sheet_responses, user_id=None):
         'Do you have all the necessary equipment?',
         'Do you have a car you can share?',
         'What municipio do you live in?',
-        'Something important we need to know?'
+        'Something important we need to know?',
+        'reminder_preference'
     ])
 
     # Conta i partecipanti per ogni hike
@@ -229,8 +255,182 @@ def create_calendar(year, month):
 
     return InlineKeyboardMarkup(keyboard)
 
+def get_weather_forecast(lat, lon, date_str, api_key):
+    """
+    Ottiene le previsioni meteo per una data specifica
+    Usa coordinate invece del nome della località per maggiore precisione
+    """
+    try:
+        # Converti la data stringa in oggetto datetime
+        target_date = datetime.strptime(date_str, '%d/%m/%Y').date()
+        today = datetime.now().date()
+        days_diff = (target_date - today).days
+
+        if days_diff <= 5:  # Usiamo forecast giornaliero per previsioni fino a 5 giorni
+            url = f"https://api.openweathermap.org/data/2.5/forecast/daily"
+            params = {
+                'lat': lat,
+                'lon': lon,
+                'appid': api_key,
+                'units': 'metric',
+                'cnt': days_diff + 1
+            }
+            response = requests.get(url, params=params)
+            data = response.json()
+            forecast = data['list'][-1]  # Prendiamo l'ultimo giorno (quello target)
+            
+            return {
+                'temp_min': round(forecast['temp']['min']),
+                'temp_max': round(forecast['temp']['max']),
+                'description': forecast['weather'][0]['description'],
+                'probability_rain': round(forecast.get('pop', 0) * 100),  # Probabilità di pioggia in percentuale
+                'accuracy': 'high'
+            }
+            
+        else:  # Per previsioni oltre 5 giorni usiamo il forecast climatico
+            url = "https://api.openweathermap.org/data/2.5/climate/forecast/daily"
+            params = {
+                'lat': lat,
+                'lon': lon,
+                'appid': api_key,
+                'units': 'metric'
+            }
+            response = requests.get(url, params=params)
+            data = response.json()
+            
+            return {
+                'temp_min': round(data['temperature']['min']),
+                'temp_max': round(data['temperature']['max']),
+                'probability_rain': round(data.get('probability_of_precipitation', 0) * 100),
+                'accuracy': 'low'  # Indichiamo che è una previsione a lungo termine
+            }
+            
+    except Exception as e:
+        print(f"Error getting weather forecast: {e}")
+        return None
+
+def format_weather_message(weather, days_until_hike):
+    """
+    Formatta il messaggio meteo in base all'accuratezza della previsione
+    """
+    if not weather:
+        return "⚠️ _Weather forecast not available_"
+        
+    if weather['accuracy'] == 'high':
+        return (
+            f"🌡 *Weather Forecast*:\n"
+            f"Temperature: {weather['temp_min']}°C - {weather['temp_max']}°C\n"
+            f"Conditions: {weather['description']}\n"
+            f"Chance of rain: {weather['probability_rain']}%"
+        )
+    else:
+        return (
+            f"🌡 *Weather Trend* (preliminary forecast):\n"
+            f"Expected temperature: {weather['temp_min']}°C - {weather['temp_max']}°C\n"
+            f"Chance of rain: {weather['probability_rain']}%\n"
+            f"_A more accurate forecast will be provided 3 days before the hike_"
+        )
+
+def check_and_send_reminders(context):
+    """
+    Funzione da eseguire periodicamente per controllare e inviare i reminder
+    Args:
+        context: JobContext passato da job_queue
+    """
+    sheet_responses = context.bot.dispatcher.bot_data['sheet_responses']
+    sheet_hikes = context.bot.dispatcher.bot_data['sheet_hikes']
+    registrations = sheet_responses.get_all_records()
+    hikes_data = sheet_hikes.get_all_records()
+    today = datetime.now(rome_tz).date()
+    
+    # Mappa degli hike con le loro coordinate
+    hikes_coords = {
+        hike['hike']: {'lat': hike['latitude'], 'lon': hike['longitude']}
+        for hike in hikes_data
+    }
+    
+    for reg in registrations:
+        hikes = reg['Choose the hike'].split('; ')
+        reminder_pref = reg['Reminder preference']
+        telegram_id = reg['Telegram_ID']
+        
+        for hike in hikes:
+            if hike:
+                date_str, name = hike.split(' - ', 1)
+                hike_date = datetime.strptime(date_str, '%d/%m/%Y').date()
+                days_until_hike = (hike_date - today).days
+                
+                # Controlla se è il momento di inviare un reminder
+                if ((days_until_hike == 7 and ('7' in reminder_pref or 'both' in reminder_pref)) or
+                    (days_until_hike == 3 and ('3' in reminder_pref or 'both' in reminder_pref))):
+                    
+                    # Ottieni previsioni meteo
+                    coords = hikes_coords.get(name)
+                    weather = None
+                    if coords:
+                        weather = get_weather_forecast(
+                            coords['lat'], 
+                            coords['lon'], 
+                            date_str,
+                            os.getenv('OPENWEATHER_API_KEY')
+                        )
+                    
+                    weather_msg = format_weather_message(weather, days_until_hike)
+                    
+                    message = (
+                        f"⏰ *Reminder*: You have an upcoming hike!\n\n"
+                        f"🗓 *Date:* {date_str}\n"
+                        f"🏃 *Hike:* {name}\n\n"
+                        f"{weather_msg}\n\n"
+                        f"_Remember to check the required equipment and be prepared!_"
+                    )
+                    
+                    try:
+                        context.bot.send_message(
+                            chat_id=telegram_id,
+                            text=message,
+                            parse_mode='Markdown'
+                        )
+                    except Exception as e:
+                        print(f"Error sending reminder to {telegram_id}: {e}")
+
+def error_handler(update, context):
+    """Gestisce gli errori in modo globale"""
+    try:
+        raise context.error
+    except telegram.error.NetworkError:
+        message = "⚠️ Network error occurred. Please try again."
+    except telegram.error.Unauthorized:
+        # l'utente ha bloccato il bot
+        return
+    except telegram.error.TimedOut:
+        message = "⚠️ Request timed out. Please try again."
+    except telegram.error.TelegramError:
+        message = "⚠️ Telegram error occurred. Please try again later."
+    except Exception as e:
+        message = "⚠️ An unexpected error occurred. Please try again later."
+        print(f"Unexpected error: {e}")
+
+    # Invia messaggio all'utente se possibile
+    if update and update.effective_chat:
+        try:
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=message
+            )
+        except:
+            pass
+
 ## PARTE 2 - Funzioni menu principale
 def start(update, context):
+    # Check rate limiting
+    if not context.bot_data['rate_limiter'].is_allowed(update.effective_user.id):
+        update.message.reply_text(
+            "⚠️ You're making too many requests. Please wait a minute and try again."
+        )
+        return ConversationHandler.END
+
+    # check appartenenza al gruppo    
     if not check_user_membership(update, context):
         update.message.reply_text(
             "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
@@ -287,7 +487,7 @@ def handle_menu_choice(update, context):
             "Request access to the group and try again!"
         )
         return ConversationHandler.END
-    
+
     if query.data == 'signup':
         # Controlla disponibilità hike prima di iniziare il questionario
         available_hikes = check_future_hikes_availability(query, context, query.from_user.id)
@@ -445,12 +645,12 @@ def handle_cancel_request(update, context):
     """Gestisce la richiesta iniziale di cancellazione"""
     query = update.callback_query
     query.answer()
-    
+
     # Ottieni l'indice dell'hike da cancellare
     hike_index = int(query.data.split('_')[2])
     hike = context.user_data['my_hikes'][hike_index]
     context.user_data['hike_to_cancel'] = hike  # Salva l'hike da cancellare
-    
+
     keyboard = [
         [
             InlineKeyboardButton("Yes ✅", callback_data='confirm_cancel'),
@@ -458,7 +658,7 @@ def handle_cancel_request(update, context):
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     query.edit_message_text(
         f"Are you sure you want to cancel your registration for:\n\n"
         f"🗓 {hike['date'].strftime('%d/%m/%Y')}\n"
@@ -471,42 +671,42 @@ def handle_cancel_confirmation(update, context):
     """Gestisce la conferma o l'annullamento della cancellazione"""
     query = update.callback_query
     query.answer()
-    
+
     if query.data == 'abort_cancel':
         # Torna alla visualizzazione dell'hike
         return show_hike_details(query, context)
-    
+
     # Procedi con la cancellazione
     hike_to_cancel = context.user_data['hike_to_cancel']
     sheet_responses = context.bot_data['sheet_responses']
     user_id = query.from_user.id
-    
+
     # Trova la riga dell'utente
     registrations = sheet_responses.get_all_records()
     row_number = None
     current_hikes = []
-    
+
     for idx, reg in enumerate(registrations, start=2):  # start=2 perché la prima riga sono le intestazioni
         if str(reg['Telegram_ID']) == str(user_id):
             row_number = idx
             current_hikes = reg['Choose the hike'].split('; ')
             break
-    
+
     if row_number:
         # Rimuovi l'hike dalla lista
         hike_to_remove = f"{hike_to_cancel['date'].strftime('%d/%m/%Y')} - {hike_to_cancel['name']}"
         new_hikes = [h for h in current_hikes if h and h != hike_to_remove]
-        
+
         # Aggiorna il foglio
         sheet_responses.update_cell(row_number, 8, '; '.join(new_hikes))  # 8 è la colonna 'Choose the hike'
-        
+
         # Mostra messaggio di conferma
         query.edit_message_text(
             "✅ Registration successfully cancelled.\n"
             "Use /start to go back to the home menu."
         )
         return ConversationHandler.END
-    
+
     # In caso di errore
     query.edit_message_text(
         "❌ Something went wrong.\n"
@@ -522,7 +722,7 @@ def handle_invalid_message(update, context):
             "Request access to the group and try again!"
         )
         return ConversationHandler.END
-    
+
     keyboard = [
         [
             InlineKeyboardButton("Yes ✅", callback_data='restart_yes'),
@@ -752,6 +952,42 @@ def handle_municipio(update, context):
         return ELSEWHERE
 
     context.user_data['municipio'] = query.data
+    return handle_reminder_preferences(update, context)  # Modificato qui per andare ai reminder
+
+def handle_reminder_preferences(update, context):
+    query = update.callback_query
+    query.answer()
+
+    keyboard = [
+        [InlineKeyboardButton("7 days before", callback_data='reminder_7')],
+        [InlineKeyboardButton("3 days before", callback_data='reminder_3')],
+        [InlineKeyboardButton("Both", callback_data='reminder_both')],
+        [InlineKeyboardButton("No reminders", callback_data='reminder_none')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="⏰ Would you like to receive reminders before the hike?\n"
+             "_Choose your preferred reminder option:_",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return REMINDER_CHOICE
+
+def save_reminder_preference(update, context):
+    query = update.callback_query
+    query.answer()
+    
+    reminder_choice = query.data.replace('reminder_', '')
+    reminder_mapping = {
+        '7': '7 days',
+        '3': '3 days',
+        'both': '7 and 3 days',
+        'none': 'No reminders'
+    }
+    context.user_data['reminder_preference'] = reminder_mapping[reminder_choice]
+    
     return ask_notes(update, context, query.message.chat_id)
 
 def handle_elsewhere(update, context):
@@ -816,37 +1052,54 @@ def handle_final_choice(update, context):
                         return ConversationHandler.END
 
         # Save to Google Sheets
-        sheet_responses = context.bot_data['sheet_responses']
-        data = context.user_data
-        timestamp = datetime.now(rome_tz).strftime("%Y-%m-%d %H:%M:%S")
-        telegram_id = str(query.from_user.id)  # Aggiungo l'ID Telegram
+        try:
+            sheet_responses = context.bot_data['sheet_responses']
+            data = context.user_data
+            timestamp = datetime.now(rome_tz).strftime("%Y-%m-%d %H:%M:%S")
+            telegram_id = str(query.from_user.id)
 
-        # Format selected hikes for saving
-        hikes_text = '; '.join([
-            f"{hike['date'].strftime('%d/%m/%Y')} - {hike['name']}"
-            for hike in selected_hikes
-        ])
+            # Format selected hikes for saving
+            hikes_text = '; '.join([
+                f"{hike['date'].strftime('%d/%m/%Y')} - {hike['name']}"
+                for hike in selected_hikes
+            ])
 
-        # Save to sheet
-        sheet_responses.append_row([
-            timestamp,  # Timestamp_risposte
-            telegram_id,
-            data.get('name', ''),  # Name and surname
-            data.get('email', ''),  # Email
-            data.get('phone', ''),  # Phone number
-            data.get('birth_date', ''),  # Birth date
-            data.get('medical', ''),  # Medical conditions
-            hikes_text,  # Choose the hike
-            data.get('equipment', ''),  # Do you have all the necessary equipment?
-            data.get('car_share', ''),  # Do you have a car you can share?
-            data.get('municipio', ''),  # What municipio do you live in?
-            data.get('notes', '')  # Something important we need to know?
-        ])
+            # Retry logic for sheet writing
+            for attempt in range(3):
+                try:
+                    sheet_responses.append_row([
+                        timestamp,
+                        telegram_id,
+                        data.get('name', ''),
+                        data.get('email', ''),
+                        data.get('phone', ''),
+                        data.get('birth_date', ''),
+                        data.get('medical', ''),
+                        hikes_text,
+                        data.get('equipment', ''),
+                        data.get('car_share', ''),
+                        data.get('municipio', ''),
+                        data.get('notes', ''),
+                        data.get('reminder_preference', 'No reminders')
+                    ])
+                    break
+                except gspread.exceptions.APIError as e:
+                    if attempt == 2:  # ultimo tentativo
+                        raise e
+                    time.sleep(1)  # attendi prima di riprovare
 
-        query.edit_message_text(
-            "✅ Thanks for signing up for the next hike.\n"
-            "You can use /start to go back to the home menu."
-        )
+            query.edit_message_text(
+                "✅ Thanks for signing up for the next hike.\n"
+                "You can use /start to go back to the home menu."
+            )
+
+        except Exception as e:
+            print(f"Error saving registration: {e}")
+            query.edit_message_text(
+                "⚠️ There was an error saving your registration. Please try again later or contact support."
+            )
+            return ConversationHandler.END
+
     else:
         query.edit_message_text(
             "❌ We are sorry but accepting these rules is necessary to participate in the walks.\n"
@@ -864,8 +1117,22 @@ def cancel(update, context):
     )
     return ConversationHandler.END
 
+import atexit
+
+def cleanup():
+    """Funzione di cleanup che viene chiamata all'uscita"""
+    try:
+        updater.stop()
+    except:
+        pass
+
+atexit.register(cleanup)
+
 def main():
-    TOKEN = '8102799028:AAGpwcdzQ0WigeV_abM2a8yR__bAlJXhdZM'
+    # token bot telegram
+    TOKEN = 'xxxxxxxxxx'
+    # api meteo
+    os.environ['OPENWEATHER_API_KEY'] = 'xxxxxxxxxx'
 
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
@@ -874,6 +1141,20 @@ def main():
     sheet_responses, sheet_hikes = setup_google_sheets()
     dp.bot_data['sheet_responses'] = sheet_responses
     dp.bot_data['sheet_hikes'] = sheet_hikes
+
+    # Setup rate limiter
+    rate_limiter = RateLimiter(max_requests=5, time_window=60)  # 5 richieste al minuto
+    dp.bot_data['rate_limiter'] = rate_limiter
+    
+    # Setup error handler
+    dp.add_error_handler(error_handler)
+
+    # Aggiungi job scheduler per i reminder
+    job_queue = updater.job_queue
+    job_queue.run_daily(
+        callback=check_and_send_reminders,
+        time=datetime_time(hour=9, minute=0, tzinfo=rome_tz)  # Invia reminder alle 9:00 ora di Roma
+    )
 
     conv_handler = ConversationHandler(
         entry_points=[
@@ -888,6 +1169,10 @@ def main():
                 CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)$'),
                 CallbackQueryHandler(handle_cancel_request, pattern='^cancel_hike_\d+$'),
                 CallbackQueryHandler(handle_cancel_confirmation, pattern='^(confirm_cancel|abort_cancel)$')
+            ],
+            REMINDER_CHOICE: [
+                CommandHandler('start', start),
+                CallbackQueryHandler(save_reminder_preference, pattern='^reminder_')
             ],
             NAME: [
                 CommandHandler('start', start),
@@ -943,16 +1228,14 @@ def main():
 
     dp.add_handler(conv_handler)
 
-    updater.start_polling()
-
-    try:
-        print("🚀 Bot started! Press CTRL+C to stop.")
-        while True:
-            import time
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("🛑 Bot stopped!")
-        updater.stop()
+    # Avvia il bot
+    updater.start_polling(drop_pending_updates=True)  # Aggiungi drop_pending_updates=True
+    print("🚀 Bot started! Press CTRL+C to stop.")
+    
+    # Blocca l'esecuzione fino a quando il bot non viene fermato
+    updater.idle()
+    
+    print("🛑 Bot stopped!")
 
 if __name__ == '__main__':
     main()
