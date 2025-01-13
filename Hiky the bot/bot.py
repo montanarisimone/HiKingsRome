@@ -3,7 +3,9 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler, CallbackQueryHandler
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime, date, timedelta, time
+from datetime import datetime, date, timedelta
+from datetime import time as datetime_time  # Rinominato per evitare conflitti
+import time  # Modulo time per sleep()
 from calendar import monthcalendar, month_name
 import pytz
 import requests
