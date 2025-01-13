@@ -216,14 +216,23 @@ def create_year_buttons(decade):
 
 def create_month_buttons(year):
     keyboard = []
-    for i in range(1, 13, 3):
+    current_date = date.today()
+    limit_date = date(current_date.year - 18, current_date.month, current_date.day)
+    
+    if year == limit_date.year:
+        max_month = limit_date.month
+    else:
+        max_month = 12
+
+    for i in range(1, max_month + 1, 3):
         row = []
-        for month in range(i, min(i + 3, 13)):
+        for month in range(i, min(i + 3, max_month + 1)):
             row.append(InlineKeyboardButton(
                 month_name[month],
                 callback_data=f'month_{year}_{month}'
             ))
         keyboard.append(row)
+    
     return InlineKeyboardMarkup(keyboard)
 
 def create_calendar(year, month):
