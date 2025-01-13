@@ -184,8 +184,11 @@ def create_hikes_keyboard(hikes, context):
 
 def create_year_selector():
     current_year = date.today().year
+    current_month = date.today().month
+    current_day = date.today().day
+    
     keyboard = []
-    decades = list(range(1980, current_year-8, 10))
+    decades = list(range(1980, (current_year - 18) + 1, 10))
     for i in range(0, len(decades), 2):
         row = []
         for year in decades[i:i+2]:
@@ -198,7 +201,9 @@ def create_year_selector():
 
 def create_year_buttons(decade):
     keyboard = []
-    years = list(range(decade, decade + 10))
+    current_year = date.today().year
+    end_year = min(decade + 10, current_year - 18 + 1)
+    years = list(range(decade, end_year))
     for i in range(0, len(years), 3):
         row = []
         for year in years[i:i+3]:
@@ -223,6 +228,8 @@ def create_month_buttons(year):
 
 def create_calendar(year, month):
     keyboard = []
+    current_date = date.today()
+    limit_date = date(current_date.year - 18, current_date.month, current_date.day)
 
     keyboard.append([
         InlineKeyboardButton("<<", callback_data=f'year_{year-1}_{month}'),
@@ -247,10 +254,14 @@ def create_calendar(year, month):
             if day == 0:
                 row.append(InlineKeyboardButton(" ", callback_data='ignore'))
             else:
-                row.append(InlineKeyboardButton(
-                    str(day),
-                    callback_data=f'date_{year}_{month}_{day}'
-                ))
+                selected_date = date(year, month, day)
+                if selected_date <= limit_date:
+                    row.append(InlineKeyboardButton(
+                        str(day),
+                        callback_data=f'date_{year}_{month}_{day}'
+                    ))
+                else:
+                    row.append(InlineKeyboardButton(" ", callback_data='ignore'))
         keyboard.append(row)
 
     return InlineKeyboardMarkup(keyboard)
