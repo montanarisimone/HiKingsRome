@@ -64,8 +64,8 @@ def setup_google_sheets():
     client = gspread.authorize(credentials)
 
     # Open both sheets
-    sheet_responses = client.open_by_key('1EGKDWwjoscQ-q0QNgIQBY2q_nOD7z4C_AYArdQQ_-gY').worksheet('Registrazioni')
-    sheet_hikes = client.open_by_key('1EGKDWwjoscQ-q0QNgIQBY2q_nOD7z4C_AYArdQQ_-gY').worksheet('ProssimeUscite')
+    sheet_responses = client.open_by_key('[GOOGLE SHEET ID]').worksheet('Registrazioni')
+    sheet_hikes = client.open_by_key('[GOOGLE SHEET ID]').worksheet('ProssimeUscite')
     return sheet_responses, sheet_hikes
 
 def get_available_hikes(sheet_hikes, sheet_responses, user_id=None):
