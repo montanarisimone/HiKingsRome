@@ -497,6 +497,50 @@ def check_future_hikes_availability(query, context, user_id):
 
     return available_hikes
 
+def restart(update, context):
+    """Comando per resettare il bot"""
+    user_id = update.effective_user.id
+    current_state = context.chat_data.get('last_state')
+    
+    # Se l'utente stava compilando il form, chiedi conferma
+    if current_state in [NAME, EMAIL, PHONE, BIRTH_DATE, MEDICAL, HIKE_CHOICE, EQUIPMENT, 
+                        CAR_SHARE, MUNICIPIO, ELSEWHERE, NOTES, REMINDER_CHOICE]:
+        keyboard = [
+            [
+                InlineKeyboardButton("Yes ✅", callback_data='confirm_restart'),
+                InlineKeyboardButton("No ❌", callback_data='cancel_restart')
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        update.message.reply_text(
+            "⚠️ You are in the middle of registration.\n"
+            "Are you sure you want to restart? All progress will be lost.",
+            reply_markup=reply_markup
+        )
+        return CHOOSING
+    
+    # Se non c'è niente da confermare, procedi con il restart
+    context.user_data.clear()
+    context.chat_data.clear()
+    update.message.reply_text("🔄 Bot reset successfully. Starting new session...")
+    return start(update, context)
+
+def handle_restart_confirmation(update, context):
+    """Gestisce la conferma del restart"""
+    query = update.callback_query
+    query.answer()
+    
+    if query.data == 'confirm_restart':
+        context.user_data.clear()
+        context.chat_data.clear()
+        query.edit_message_text("🔄 Bot reset confirmed. Starting new session...")
+        return start(update.callback_query, context)
+    else:
+        query.edit_message_text("✅ Restart cancelled. You can continue from where you left off.")
+        return context.chat_data.get('last_state', CHOOSING)
+
+
 def handle_menu_choice(update, context):
     query = update.callback_query
     query.answer()
@@ -551,6 +595,8 @@ def handle_menu_choice(update, context):
             reply_markup=reply_markup
         )
         return CHOOSING
+
+
 
 
 ## PARTE 3 - Funzioni gestione hike prenotati
@@ -771,16 +817,19 @@ def handle_restart_choice(update, context):
         return ConversationHandler.END
 
 def save_name(update, context):
+    context.chat_data['last_state'] = NAME
     context.user_data['name'] = update.message.text
     update.message.reply_text("📧 Email?")
     return EMAIL
 
 def save_email(update, context):
+    context.chat_data['last_state'] = EMAIL
     context.user_data['email'] = update.message.text
     update.message.reply_text("📱 Phone number?")
     return PHONE
 
 def save_phone(update, context):
+    context.chat_data['last_state'] = PHONE
     context.user_data['phone'] = update.message.text
     update.message.reply_text(
         "📅 Select the decade of your birth year:",
@@ -789,6 +838,7 @@ def save_phone(update, context):
     return BIRTH_DATE
 
 def handle_calendar(update, context):
+    context.chat_data['last_state'] = BIRTH_DATE
     query = update.callback_query
     query.answer()
 
@@ -842,6 +892,7 @@ def handle_calendar(update, context):
 
 ## PARTE 5 - Gestione delle risposte e selezione hike
 def save_medical(update, context):
+    context.chat_data['last_state'] = MEDICAL
     context.user_data['medical'] = update.message.text
     context.user_data['selected_hikes'] = []
 
@@ -858,6 +909,7 @@ def save_medical(update, context):
     return HIKE_CHOICE
 
 def handle_hike(update, context):
+    context.chat_data['last_state'] = HIKE_CHOICE
     query = update.callback_query
     query.answer()
 
@@ -918,6 +970,7 @@ def handle_hike(update, context):
 
 ## PARTE 6 - Gestione delle domande finali e salvataggio
 def handle_equipment(update, context):
+    context.chat_data['last_state'] = EQUIPMENT
     query = update.callback_query
     query.answer()
 
@@ -942,6 +995,7 @@ def handle_equipment(update, context):
     return CAR_SHARE
 
 def handle_car_share(update, context):
+    context.chat_data['last_state'] = CAR_SHARE
     query = update.callback_query
     query.answer()
 
@@ -964,6 +1018,7 @@ def handle_car_share(update, context):
     return MUNICIPIO
 
 def handle_municipio(update, context):
+    context.chat_data['last_state'] = MUNICIPIO
     query = update.callback_query
     query.answer()
 
@@ -996,6 +1051,7 @@ def handle_reminder_preferences(update, context):
     return REMINDER_CHOICE
 
 def save_reminder_preference(update, context):
+    context.chat_data['last_state'] = REMINDER_CHOICE
     query = update.callback_query
     query.answer()
 
@@ -1011,6 +1067,7 @@ def save_reminder_preference(update, context):
     return ask_notes(update, context, query.message.chat_id)
 
 def handle_elsewhere(update, context):
+    context.chat_data['last_state'] = ELSEWHERE
     context.user_data['municipio'] = f"Elsewhere - {update.message.text}"
     return ask_notes(update, context, update.message.chat_id)
 
@@ -1025,6 +1082,7 @@ def ask_notes(update, context, chat_id):
 
 ## PARTE 7 - Funzioni finali e main()
 def save_notes(update, context):
+    context.chat_data['last_state'] = NOTES
     context.user_data['notes'] = update.message.text
 
     keyboard = [
@@ -1176,6 +1234,8 @@ def main():
     # Setup error handler
     dp.add_error_handler(error_handler)
 
+    dp.add_handler(CommandHandler('restart', restart))
+
     # Aggiungi job scheduler per i reminder
     job_queue = updater.job_queue
     job_queue.run_daily(
@@ -1195,7 +1255,8 @@ def main():
                 CallbackQueryHandler(handle_menu_choice, pattern='^(signup|myhikes|links|back_to_menu)$'),
                 CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)$'),
                 CallbackQueryHandler(handle_cancel_request, pattern='^cancel_hike_\d+$'),
-                CallbackQueryHandler(handle_cancel_confirmation, pattern='^(confirm_cancel|abort_cancel)$')
+                CallbackQueryHandler(handle_cancel_confirmation, pattern='^(confirm_cancel|abort_cancel)$'),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(confirm|cancel)_restart$')
             ],
             REMINDER_CHOICE: [
                 CommandHandler('start', start),
@@ -1250,7 +1311,10 @@ def main():
                 CallbackQueryHandler(handle_final_choice)
             ]
         },
-        fallbacks=[CommandHandler('cancel', cancel)]
+        fallbacks=[
+            CommandHandler('cancel', cancel),
+            CommandHandler('restart', restart)
+        ]
     )
 
     dp.add_handler(conv_handler)
