@@ -775,19 +775,11 @@ def handle_calendar(update, context):
     data = query.data.split('_')
     action = data[0]
 
-    current_year = date.today().year
-    
-    if action == 'year':
-        year = int(data[1])
-        # Controlla che l'utente abbia almeno 18 anni
-        if current_year - year < 18:
-            query.answer("You must be at least 18 years old", show_alert=True)
-            return BIRTH_DATE
-        
-        context.user_data['birth_year'] = year
+    if action == 'decade':
+        decade = int(data[1])
         query.edit_message_text(
-            "📅 Select birth month:",
-            reply_markup=create_month_buttons(year)
+            "📅 Select your birth year:",
+            reply_markup=create_year_buttons(decade)
         )
         return BIRTH_DATE
 
