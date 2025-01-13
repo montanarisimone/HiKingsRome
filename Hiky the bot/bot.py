@@ -185,7 +185,7 @@ def create_hikes_keyboard(hikes, context):
 def create_year_selector():
     current_year = date.today().year
     keyboard = []
-    decades = list(range(1980, current_year-18, 10))
+    decades = list(range(1980, current_year-8, 10))
     for i in range(0, len(decades), 2):
         row = []
         for year in decades[i:i+2]:
@@ -775,11 +775,19 @@ def handle_calendar(update, context):
     data = query.data.split('_')
     action = data[0]
 
-    if action == 'decade':
-        decade = int(data[1])
+    current_year = date.today().year
+    
+    if action == 'year':
+        year = int(data[1])
+        # Controlla che l'utente abbia almeno 18 anni
+        if current_year - year < 18:
+            query.answer("You must be at least 18 years old", show_alert=True)
+            return BIRTH_DATE
+        
+        context.user_data['birth_year'] = year
         query.edit_message_text(
-            "📅 Select your birth year:",
-            reply_markup=create_year_buttons(decade)
+            "📅 Select birth month:",
+            reply_markup=create_month_buttons(year)
         )
         return BIRTH_DATE
 
