@@ -1256,7 +1256,7 @@ def main():
                 CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)$'),
                 CallbackQueryHandler(handle_cancel_request, pattern='^cancel_hike_\d+$'),
                 CallbackQueryHandler(handle_cancel_confirmation, pattern='^(confirm_cancel|abort_cancel)$'),
-                CallbackQueryHandler(handle_restart_confirmation, pattern='^(confirm|cancel)_restart$')
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(confirm_restart|cancel_restart)$')
             ],
             REMINDER_CHOICE: [
                 CommandHandler('start', start),
