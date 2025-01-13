@@ -1126,6 +1126,10 @@ def cleanup():
 atexit.register(cleanup)
 
 def main():
+    
+    # Get port number from environment variable
+    port = int(os.environ.get('PORT', 10000))
+    
     # token bot telegram
     TOKEN = os.environ.get('TELEGRAM_TOKEN')
     # api meteo
@@ -1229,13 +1233,20 @@ def main():
     dp.add_handler(conv_handler)
 
     # Avvia il bot
-    updater.start_polling(drop_pending_updates=True)  # Aggiungi drop_pending_updates=True
-    print("🚀 Bot started! Press CTRL+C to stop.")
+    # Start the webhook
+    updater.start_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path=TOKEN,
+        webhook_url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/{TOKEN}"
+    )
+    #updater.start_polling(drop_pending_updates=True)  # Aggiungi drop_pending_updates=True
+    #print("🚀 Bot started! Press CTRL+C to stop.")
 
     # Blocca l'esecuzione fino a quando il bot non viene fermato
     updater.idle()
 
-    print("🛑 Bot stopped!")
+    #print("🛑 Bot stopped!")
 
 if __name__ == '__main__':
     main()
