@@ -58,9 +58,14 @@ def setup_google_sheets():
     credentials = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
     client = gspread.authorize(credentials)
 
+    # Get sheet ID from environment variable
+    SHEET_ID = os.environ.get('GOOGLE_SHEET_ID')
+    if not SHEET_ID:
+        raise ValueError("No Google Sheet ID provided")
+
     # Open both sheets
-    sheet_responses = client.open_by_key('[GOOGLE SHEET ID]').worksheet('Registrazioni')
-    sheet_hikes = client.open_by_key('[GOOGLE SHEET ID]').worksheet('ProssimeUscite')
+    sheet_responses = client.open_by_key(SHEET_ID).worksheet('Registrazioni')
+    sheet_hikes = client.open_by_key(SHEET_ID).worksheet('ProssimeUscite')
     return sheet_responses, sheet_hikes
 
 def get_available_hikes(sheet_hikes, sheet_responses, user_id=None):
