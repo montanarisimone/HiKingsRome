@@ -1,8 +1,3 @@
-!pip install python-telegram-bot==13.7
-!pip install gspread oauth2client
-!pip install pytz
-
-
 ## PARTE 1 - IMPORT E SETUP INIZIALE
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler, CallbackQueryHandler
