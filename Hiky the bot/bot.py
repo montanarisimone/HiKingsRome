@@ -734,50 +734,64 @@ def handle_cancel_request(update, context):
     return CHOOSING
 
 def handle_cancel_confirmation(update, context):
-    """Gestisce la conferma o l'annullamento della cancellazione"""
     query = update.callback_query
     query.answer()
 
     if query.data == 'abort_cancel':
-        # Torna alla visualizzazione dell'hike
         return show_hike_details(query, context)
 
-    # Procedi con la cancellazione
     hike_to_cancel = context.user_data['hike_to_cancel']
     sheet_responses = context.bot_data['sheet_responses']
     user_id = query.from_user.id
 
-    # Trova la riga dell'utente
+    # Trova TUTTE le righe dell'utente
     registrations = sheet_responses.get_all_records()
-    row_number = None
-    current_hikes = []
-
+    user_rows = []
     for idx, reg in enumerate(registrations, start=2):  # start=2 perché la prima riga sono le intestazioni
         if str(reg['Telegram_ID']) == str(user_id):
-            row_number = idx
-            current_hikes = reg['Choose the hike'].split('; ')
-            break
+            user_rows.append({
+                'row': idx,
+                'hikes': reg['Choose the hike'].split('; '),
+                'current_reg': reg
+            })
 
-    if row_number:
-        # Rimuovi l'hike dalla lista
-        hike_to_remove = f"{hike_to_cancel['date'].strftime('%d/%m/%Y')} - {hike_to_cancel['name']}"
-        new_hikes = [h for h in current_hikes if h and h != hike_to_remove]
-
-        # Aggiorna il foglio
-        sheet_responses.update_cell(row_number, 8, '; '.join(new_hikes))  # 8 è la colonna 'Choose the hike'
-
-        # Mostra messaggio di conferma
+    if not user_rows:
         query.edit_message_text(
-            "✅ Registration successfully cancelled.\n"
+            "❌ Something went wrong.\n"
             "Use /start to go back to the home menu."
         )
         return ConversationHandler.END
 
-    # In caso di errore
-    query.edit_message_text(
-        "❌ Something went wrong.\n"
-        "Use /start to go back to the home menu."
-    )
+    # Formato dell'hike da cancellare
+    hike_to_remove = f"{hike_to_cancel['date'].strftime('%d/%m/%Y')} - {hike_to_cancel['name']}"
+    
+    success = False
+    for row_data in user_rows:
+        if hike_to_remove in row_data['hikes']:
+            # Rimuovi l'hike dalla lista
+            new_hikes = [h for h in row_data['hikes'] if h and h != hike_to_remove]
+            
+            if new_hikes:
+                # Se ci sono ancora altri hike, aggiorna la riga
+                sheet_responses.update_cell(row_data['row'], 8, '; '.join(new_hikes))
+            else:
+                # Se non ci sono più hike, elimina l'intera riga
+                sheet_responses.delete_rows(row_data['row'])
+            
+            success = True
+            break
+
+    if success:
+        query.edit_message_text(
+            "✅ Registration successfully cancelled.\n"
+            "Use /start to go back to the home menu."
+        )
+    else:
+        query.edit_message_text(
+            "❌ Could not find the registration to cancel.\n"
+            "Use /start to go back to the home menu."
+        )
+
     return ConversationHandler.END
 
 ## PARTE 4 - Gestione delle domande del questionario
