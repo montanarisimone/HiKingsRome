@@ -1,4 +1,5 @@
 ## PARTE 1 - IMPORT E SETUP INIZIALE
+import telegram
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler, CallbackQueryHandler
 import gspread
@@ -505,7 +506,8 @@ def restart(update, context):
     
     # Se l'utente stava compilando il form, chiedi conferma
     if current_state in [NAME, EMAIL, PHONE, BIRTH_DATE, MEDICAL, HIKE_CHOICE, EQUIPMENT, 
-                        CAR_SHARE, MUNICIPIO, ELSEWHERE, NOTES, REMINDER_CHOICE]:
+                        CAR_SHARE, LOCATION_CHOICE, QUARTIERE_CHOICE, FINAL_LOCATION, 
+                        CUSTOM_QUARTIERE, NOTES, REMINDER_CHOICE]:
         keyboard = [
             [
                 InlineKeyboardButton("Yes ✅", callback_data='confirm_restart'),
