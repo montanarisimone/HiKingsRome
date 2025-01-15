@@ -51,7 +51,8 @@ def check_user_membership(update, context):
 
 # Stati della conversazione
 (CHOOSING, NAME, EMAIL, PHONE, BIRTH_DATE, MEDICAL, HIKE_CHOICE, EQUIPMENT,
- CAR_SHARE, MUNICIPIO, ELSEWHERE, NOTES, IMPORTANT_NOTES, REMINDER_CHOICE) = range(14)
+ CAR_SHARE, LOCATION_CHOICE, QUARTIERE_CHOICE, FINAL_LOCATION, CUSTOM_QUARTIERE,
+ ELSEWHERE, NOTES, IMPORTANT_NOTES, REMINDER_CHOICE) = range(17)
 
 # Definisci il fuso orario di Roma
 rome_tz = pytz.timezone('Europe/Rome')
@@ -1015,33 +1016,124 @@ def handle_car_share(update, context):
 
     context.user_data['car_share'] = 'Yes' if query.data == 'yes_car' else 'No'
 
-    keyboard = []
-    for i in range(1, 16):
-        keyboard.append([InlineKeyboardButton(f"Municipio {i}", callback_data=f'mun_{i}')])
-    keyboard.append([InlineKeyboardButton("Elsewhere 🌍", callback_data='elsewhere')])
-
+    # Inizia il processo di selezione della location
+    keyboard = [
+        [InlineKeyboardButton("Rome Resident 🏛", callback_data='rome_resident')],
+        [InlineKeyboardButton("Outside Rome 🌍", callback_data='outside_rome')]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-
+    
     context.bot.send_message(
         chat_id=query.message.chat_id,
-        text="📍 What *municipio* do you live in?\n"
-             "_We need this information to better organise transport sharing_",
+        text="📍 Where do you live?\n"
+             "_This information helps us organize transport and meeting points_",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    return MUNICIPIO
+    return LOCATION_CHOICE
 
-def handle_municipio(update, context):
-    context.chat_data['last_state'] = MUNICIPIO
+def handle_location_choice(update, context):
     query = update.callback_query
     query.answer()
+    
+    if query.data == 'outside_rome':
+        query.edit_message_text(
+            "🌍 Please specify your location (e.g., Frascati, Tivoli, etc.):"
+        )
+        return CUSTOM_QUARTIERE
+    
+    # Definizione dei municipi con i loro quartieri
+    municipi_data = {
+        'I': ['Centro Storico', 'Trastevere', 'Testaccio', 'Esquilino', 'Prati'],
+        'II': ['Parioli', 'Flaminio', 'Salario', 'Trieste'],
+        'III': ['Monte Sacro', 'Val Melaina', 'Fidene', 'Bufalotta'],
+        'IV': ['San Basilio', 'Tiburtino', 'Pietralata'],
+        'V': ['Prenestino', 'Centocelle', 'Tor Pignattara'],
+        'VI': ['Torre Angela', 'Tor Bella Monaca', 'Lunghezza'],
+        'VII': ['Appio-Latino', 'Tuscolano', 'Cinecittà'],
+        'VIII': ['Ostiense', 'Garbatella', 'San Paolo'],
+        'IX': ['EUR', 'Torrino', 'Laurentino'],
+        'X': ['Ostia', 'Acilia', 'Infernetto'],
+        'XI': ['Portuense', 'Magliana', 'Trullo'],
+        'XII': ['Monte Verde', 'Gianicolense', 'Pisana'],
+        'XIII': ['Aurelio', 'Boccea', 'Casalotti'],
+        'XIV': ['Monte Mario', 'Primavalle', 'Ottavia'],
+        'XV': ['La Storta', 'Cesano', 'Prima Porta']
+    }
+    
+    context.user_data['municipi_data'] = municipi_data
+    
+    # Crea keyboard per i municipi
+    keyboard = []
+    for municipio in municipi_data.keys():
+        keyboard.append([InlineKeyboardButton(
+            f"Municipio {municipio}", 
+            callback_data=f'mun_{municipio}'
+        )])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.edit_message_text(
+        "🏛 Select your municipio:",
+        reply_markup=reply_markup
+    )
+    return QUARTIERE_CHOICE
 
-    if query.data == 'elsewhere':
-        query.edit_message_text("🌍 Where?")
-        return ELSEWHERE
+def handle_quartiere_choice(update, context):
+    query = update.callback_query
+    query.answer()
+    
+    municipio = query.data.replace('mun_', '')
+    context.user_data['selected_municipio'] = municipio
+    municipi_data = context.user_data['municipi_data']
+    
+    quartieri = municipi_data[municipio]
+    keyboard = []
+    
+    # Crea bottoni per ogni quartiere
+    for quartiere in quartieri:
+        keyboard.append([InlineKeyboardButton(quartiere, callback_data=f'q_{quartiere}')])
+    
+    # Aggiungi opzioni aggiuntive
+    keyboard.append([InlineKeyboardButton("Other area in this municipio", callback_data='other_area')])
+    keyboard.append([InlineKeyboardButton("🔙 Back to municipi", callback_data='back_municipi')])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.edit_message_text(
+        f"🏘 Select your area in Municipio {municipio}:",
+        reply_markup=reply_markup
+    )
+    return FINAL_LOCATION
 
-    context.user_data['municipio'] = query.data
-    return handle_reminder_preferences(update, context)  # Modificato qui per andare ai reminder
+def handle_final_location(update, context):
+    query = update.callback_query
+    query.answer()
+    
+    if query.data == 'back_municipi':
+        return handle_location_choice(update, context)
+    
+    if query.data == 'other_area':
+        query.edit_message_text("📍 Please specify your area in this municipio:")
+        return CUSTOM_QUARTIERE
+    
+    quartiere = query.data.replace('q_', '')
+    municipio = context.user_data['selected_municipio']
+    location = f"Municipio {municipio} - {quartiere}"
+    context.user_data['location'] = location
+    
+    return handle_reminder_preferences(update, context)
+
+def handle_custom_location(update, context):
+    if 'selected_municipio' in context.user_data:
+        # Custom area in a municipio
+        municipio = context.user_data['selected_municipio']
+        location = f"Municipio {municipio} - {update.message.text}"
+    else:
+        # Location outside Rome
+        location = f"Outside Rome - {update.message.text}"
+    
+    context.user_data['location'] = location
+    return handle_reminder_preferences(update, context)
+    
 
 def handle_reminder_preferences(update, context):
     query = update.callback_query
@@ -1308,13 +1400,21 @@ def main():
                 CommandHandler('start', start),
                 CallbackQueryHandler(handle_car_share)
             ],
-            MUNICIPIO: [
+            LOCATION_CHOICE: [
                 CommandHandler('start', start),
-                CallbackQueryHandler(handle_municipio)
+                CallbackQueryHandler(handle_location_choice)
             ],
-            ELSEWHERE: [
+            QUARTIERE_CHOICE: [
                 CommandHandler('start', start),
-                MessageHandler(Filters.text & ~Filters.command, handle_elsewhere)
+                CallbackQueryHandler(handle_quartiere_choice)
+            ],
+            FINAL_LOCATION: [
+                CommandHandler('start', start),
+                CallbackQueryHandler(handle_final_location)
+            ],
+            CUSTOM_QUARTIERE: [
+                CommandHandler('start', start),
+                MessageHandler(Filters.text & ~Filters.command, handle_custom_location)
             ],
             NOTES: [
                 CommandHandler('start', start),
