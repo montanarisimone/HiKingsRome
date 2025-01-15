@@ -92,7 +92,7 @@ def get_available_hikes(sheet_hikes, sheet_responses, user_id=None):
         'Choose the hike',
         'Do you have all the necessary equipment?',
         'Do you have a car you can share?',
-        'What municipio do you live in?',
+        'Location',
         'Something important we need to know?',
         'reminder_preference'
     ])
@@ -590,44 +590,119 @@ def handle_restart_confirmation(update, context):
     
     if query.data == 'yes_restart':
         try:
-            # Prima prova a eliminare il messaggio di conferma
-            query.message.delete()
+            query.message.delete()  # Elimina il messaggio di conferma
         except:
             pass
-        try:
-            # Invia un nuovo messaggio invece di modificare quello esistente
-            return direct_restart(query, context)
-        except Exception as e:
-            print(f"Error in handle_restart_confirmation: {e}")
-            # Se fallisce, prova a inviare un nuovo messaggio
-            keyboard = [
-                [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
-                [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
-                [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            try:
-                context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text="Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
-                         "How can I assist you?",
-                    reply_markup=reply_markup
-                )
-            except:
-                pass
-            return CHOOSING
+        return direct_restart(query, context)
     else:
         current_state = context.chat_data.get('last_state', CHOOSING)
         try:
             query.edit_message_text("✅ Restart cancelled. You can continue from where you left off.")
-        except:
+            # Invia la domanda appropriata in base allo stato
+            if current_state == NAME:
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="👋 Name and surname?"
+                )
+            elif current_state == EMAIL:
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="📧 Email?"
+                )
+            elif current_state == PHONE:
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="📱 Phone number?"
+                )
+            elif current_state == BIRTH_DATE:
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="📅 Select the decade of your birth year:",
+                    reply_markup=create_year_selector()
+                )
+            elif current_state == MEDICAL:
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="🏥 Medical conditions\n"
+                         "_Do you have any medical conditions that might create difficulties for you "
+                         "(Knee pain, cardiopathy, allergies etc.)?_",
+                    parse_mode='Markdown'
+                )
+            elif current_state == HIKE_CHOICE:
+                # Ricostruisci la keyboard degli hike disponibili
+                available_hikes = context.user_data.get('available_hikes', [])
+                reply_markup = create_hikes_keyboard(available_hikes, context)
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="🎯 Choose the hike(s) you want to participate in.\n"
+                         "Click to select/deselect a hike.\n"
+                         "Click '✅ Confirm selection' when done.",
+                    reply_markup=reply_markup
+                )
+            elif current_state == EQUIPMENT:
+                keyboard = [
+                    [
+                        InlineKeyboardButton("Yes ✅", callback_data='yes_eq'),
+                        InlineKeyboardButton("No ❌", callback_data='no_eq')
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="🎒 Do you have all the necessary equipment?\n"
+                         "_You can find the required equipment on the hike webpage.\n"
+                         "Remember, you could be excluded on the day of the event if you do not "
+                         "meet the required equipment standards._",
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+            elif current_state == CAR_SHARE:
+                keyboard = [
+                    [
+                        InlineKeyboardButton("Yes ✅", callback_data='yes_car'),
+                        InlineKeyboardButton("No ❌", callback_data='no_car')
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="🚗 Do you have a car you can share?\n"
+                         "_Don't worry, we will share tolls and fuel. Let us know seats number "
+                         "in the notes section at the bottom of the form._",
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+            elif current_state == LOCATION_CHOICE:
+                keyboard = [
+                    [InlineKeyboardButton("Rome Resident 🏛", callback_data='rome_resident')],
+                    [InlineKeyboardButton("Outside Rome 🌍", callback_data='outside_rome')]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="📍 Where do you live?\n"
+                         "_This information helps us organize transport and meeting points_",
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+            elif current_state == NOTES:
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="📝 Something important we need to know?\n"
+                         "_Whatever you want to tell us. If you share the car, remember the number of available seats._",
+                    parse_mode='Markdown'
+                )
+        except Exception as e:
+            print(f"Error in handle_restart_confirmation: {e}")
+            # Se fallisce, invia un messaggio generico
             try:
                 context.bot.send_message(
                     chat_id=query.message.chat_id,
-                    text="✅ Restart cancelled. You can continue from where you left off."
+                    text="Please continue with your previous answer."
                 )
             except:
                 pass
+        
         return current_state
 
 
@@ -1351,7 +1426,7 @@ def handle_final_choice(update, context):
                         hikes_text,
                         data.get('equipment', ''),
                         data.get('car_share', ''),
-                        data.get('municipio', ''),
+                        data.get('location', ''),
                         data.get('notes', ''),
                         data.get('reminder_preference', 'No reminders')
                     ])
