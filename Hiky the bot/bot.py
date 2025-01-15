@@ -522,7 +522,7 @@ def restart(update, context):
             "Are you sure you want to restart? All progress will be lost.",
             reply_markup=reply_markup
         )
-        return CHOOSING
+        return current_state  # Ritorniamo lo stato corrente invece di CHOOSING
     
     # Se non c'è niente da confermare, procedi con il restart
     return direct_restart(update, context)
@@ -561,10 +561,15 @@ def handle_restart_confirmation(update, context):
     query.answer()
     
     if query.data == 'yes_restart':
+        try:
+            query.message.delete()  # Elimina il messaggio di conferma
+        except:
+            pass
         return direct_restart(query, context)
     else:
+        current_state = context.chat_data.get('last_state', CHOOSING)
         query.edit_message_text("✅ Restart cancelled. You can continue from where you left off.")
-        return context.chat_data.get('last_state', CHOOSING)
+        return current_state
 
 
 def handle_menu_choice(update, context):
@@ -1383,70 +1388,101 @@ def main():
         states={
             CHOOSING: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_menu_choice, pattern='^(signup|myhikes|links|back_to_menu)$'),
                 CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)$'),
                 CallbackQueryHandler(handle_cancel_request, pattern='^cancel_hike_\d+$'),
                 CallbackQueryHandler(handle_cancel_confirmation, pattern='^(confirm_cancel|abort_cancel)$'),
-                CallbackQueryHandler(handle_restart_confirmation, pattern='^yes_restart|no_restart$')
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$')
             ],
             REMINDER_CHOICE: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(save_reminder_preference, pattern='^reminder_')
             ],
             NAME: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_name)
             ],
             EMAIL: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_email)
             ],
             PHONE: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_phone)
             ],
             BIRTH_DATE: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_calendar)
             ],
             MEDICAL: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_medical)
             ],
             HIKE_CHOICE: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_hike)
             ],
             EQUIPMENT: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_equipment)
             ],
             CAR_SHARE: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_car_share)
             ],
             LOCATION_CHOICE: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_location_choice)
             ],
             QUARTIERE_CHOICE: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_quartiere_choice)
             ],
             FINAL_LOCATION: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_final_location)
             ],
             CUSTOM_QUARTIERE: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, handle_custom_location)
             ],
             NOTES: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_notes)
             ],
             IMPORTANT_NOTES: [
                 CommandHandler('start', start),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_final_choice)
             ]
         },
