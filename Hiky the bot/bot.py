@@ -501,6 +501,7 @@ def check_future_hikes_availability(query, context, user_id):
 
 def restart(update, context):
     """Comando per resettare il bot"""
+    print("Restart command received")  # Debug print
     user_id = update.effective_user.id
     current_state = context.chat_data.get('last_state')
     
@@ -510,8 +511,8 @@ def restart(update, context):
                         CUSTOM_QUARTIERE, NOTES, REMINDER_CHOICE]:
         keyboard = [
             [
-                InlineKeyboardButton("Yes ✅", callback_data='confirm_restart'),
-                InlineKeyboardButton("No ❌", callback_data='cancel_restart')
+                InlineKeyboardButton("Yes", callback_data='yes_restart'),
+                InlineKeyboardButton("No", callback_data='no_restart')
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -524,36 +525,46 @@ def restart(update, context):
         return CHOOSING
     
     # Se non c'è niente da confermare, procedi con il restart
+    return direct_restart(update, context)
+
+def direct_restart(update, context):
+    """Esegue il restart direttamente"""
+    print("Executing direct restart")  # Debug print
     context.user_data.clear()
     context.chat_data.clear()
-    update.message.reply_text("🔄 Bot reset successfully. Starting new session...")
-    return start(update, context)
-
-def handle_restart_confirmation(update, context):
-    """Gestisce la conferma del restart"""
-    query = update.callback_query
-    query.answer()
     
-    if query.data == 'confirm_restart':
-        context.user_data.clear()
-        context.chat_data.clear()
-        
-        # Creiamo una nuova keyboard per il menu principale
-        keyboard = [
-            [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
-            [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
-            [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard = [
+        [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
+        [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
+        [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-        query.edit_message_text(
-            "🔄 Bot reset successfully!\n\n"
+    if isinstance(update, CallbackQuery):
+        update.edit_message_text(
             "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
             "How can I assist you?",
             reply_markup=reply_markup
         )
-        return CHOOSING
     else:
+        update.message.reply_text(
+            "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
+            "How can I assist you?",
+            reply_markup=reply_markup
+        )
+    return CHOOSING
+
+def handle_restart_confirmation(update, context):
+    """Gestisce la conferma del restart"""
+    print("Handling restart confirmation")  # Debug print
+    query = update.callback_query
+    query.answer()
+    
+    if query.data == 'yes_restart':
+        print("Yes restart selected")  # Debug print
+        return direct_restart(query, context)
+    else:
+        print("No restart selected")  # Debug print
         query.edit_message_text("✅ Restart cancelled. You can continue from where you left off.")
         return context.chat_data.get('last_state', CHOOSING)
 
@@ -1378,7 +1389,7 @@ def main():
                 CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)$'),
                 CallbackQueryHandler(handle_cancel_request, pattern='^cancel_hike_\d+$'),
                 CallbackQueryHandler(handle_cancel_confirmation, pattern='^(confirm_cancel|abort_cancel)$'),
-                CallbackQueryHandler(handle_restart_confirmation, pattern='^(confirm_restart|cancel_restart)$')
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^yes_restart|no_restart$')
             ],
             REMINDER_CHOICE: [
                 CommandHandler('start', start),
