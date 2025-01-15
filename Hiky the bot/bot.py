@@ -511,8 +511,8 @@ def restart(update, context):
                         CUSTOM_QUARTIERE, NOTES, REMINDER_CHOICE]:
         keyboard = [
             [
-                InlineKeyboardButton("Yes", callback_data='yes_restart'),
-                InlineKeyboardButton("No", callback_data='no_restart')
+                InlineKeyboardButton("Yes ✅", callback_data='yes_restart'),
+                InlineKeyboardButton("No ❌", callback_data='no_restart')
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -561,10 +561,8 @@ def handle_restart_confirmation(update, context):
     query.answer()
     
     if query.data == 'yes_restart':
-        print("Yes restart selected")  # Debug print
         return direct_restart(query, context)
     else:
-        print("No restart selected")  # Debug print
         query.edit_message_text("✅ Restart cancelled. You can continue from where you left off.")
         return context.chat_data.get('last_state', CHOOSING)
 
