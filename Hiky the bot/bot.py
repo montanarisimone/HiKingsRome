@@ -537,8 +537,22 @@ def handle_restart_confirmation(update, context):
     if query.data == 'confirm_restart':
         context.user_data.clear()
         context.chat_data.clear()
-        query.edit_message_text("🔄 Bot reset confirmed. Starting new session...")
-        return start(update.callback_query, context)
+        
+        # Creiamo una nuova keyboard per il menu principale
+        keyboard = [
+            [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
+            [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
+            [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        query.edit_message_text(
+            "🔄 Bot reset successfully!\n\n"
+            "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
+            "How can I assist you?",
+            reply_markup=reply_markup
+        )
+        return CHOOSING
     else:
         query.edit_message_text("✅ Restart cancelled. You can continue from where you left off.")
         return context.chat_data.get('last_state', CHOOSING)
