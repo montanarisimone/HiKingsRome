@@ -540,18 +540,46 @@ def direct_restart(update, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    if isinstance(update, CallbackQuery):
-        update.edit_message_text(
-            "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
-            "How can I assist you?",
-            reply_markup=reply_markup
-        )
-    else:
-        update.message.reply_text(
-            "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
-            "How can I assist you?",
-            reply_markup=reply_markup
-        )
+    try:
+        if isinstance(update, CallbackQuery):
+            # Prima prova a eliminare il messaggio precedente
+            try:
+                update.message.delete()
+            except:
+                pass
+            # Invia un nuovo messaggio invece di modificare quello esistente
+            update.message.reply_text(
+                "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
+                "How can I assist you?",
+                reply_markup=reply_markup
+            )
+        else:
+            update.message.reply_text(
+                "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
+                "How can I assist you?",
+                reply_markup=reply_markup
+            )
+    except Exception as e:
+        print(f"Error in direct_restart: {e}")
+        # Se fallisce, invia un nuovo messaggio
+        try:
+            if isinstance(update, CallbackQuery):
+                context.bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text="Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
+                         "How can I assist you?",
+                    reply_markup=reply_markup
+                )
+            else:
+                context.bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text="Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
+                         "How can I assist you?",
+                    reply_markup=reply_markup
+                )
+        except:
+            pass
+            
     return CHOOSING
 
 def handle_restart_confirmation(update, context):
@@ -562,13 +590,44 @@ def handle_restart_confirmation(update, context):
     
     if query.data == 'yes_restart':
         try:
-            query.message.delete()  # Elimina il messaggio di conferma
+            # Prima prova a eliminare il messaggio di conferma
+            query.message.delete()
         except:
             pass
-        return direct_restart(query, context)
+        try:
+            # Invia un nuovo messaggio invece di modificare quello esistente
+            return direct_restart(query, context)
+        except Exception as e:
+            print(f"Error in handle_restart_confirmation: {e}")
+            # Se fallisce, prova a inviare un nuovo messaggio
+            keyboard = [
+                [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
+                [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
+                [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            try:
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
+                         "How can I assist you?",
+                    reply_markup=reply_markup
+                )
+            except:
+                pass
+            return CHOOSING
     else:
         current_state = context.chat_data.get('last_state', CHOOSING)
-        query.edit_message_text("✅ Restart cancelled. You can continue from where you left off.")
+        try:
+            query.edit_message_text("✅ Restart cancelled. You can continue from where you left off.")
+        except:
+            try:
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="✅ Restart cancelled. You can continue from where you left off."
+                )
+            except:
+                pass
         return current_state
 
 
