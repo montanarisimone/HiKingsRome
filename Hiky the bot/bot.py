@@ -1287,6 +1287,8 @@ def handle_final_location(update, context):
     return handle_reminder_preferences(update, context)
 
 def handle_custom_location(update, context):
+    context.chat_data['last_state'] = CUSTOM_QUARTIERE
+    
     if 'selected_municipio' in context.user_data:
         # Custom area in a municipio
         municipio = context.user_data['selected_municipio']
@@ -1296,7 +1298,23 @@ def handle_custom_location(update, context):
         location = f"Outside Rome - {update.message.text}"
     
     context.user_data['location'] = location
-    return handle_reminder_preferences(update, context)
+    
+    # Crea e invia il pannello dei reminder direttamente
+    keyboard = [
+        [InlineKeyboardButton("7 days before", callback_data='reminder_7')],
+        [InlineKeyboardButton("3 days before", callback_data='reminder_3')],
+        [InlineKeyboardButton("Both", callback_data='reminder_both')],
+        [InlineKeyboardButton("No reminders", callback_data='reminder_none')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    update.message.reply_text(
+        "⏰ Would you like to receive reminders before the hike?\n"
+        "_Choose your preferred reminder option:_",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return REMINDER_CHOICE
     
 
 def handle_reminder_preferences(update, context):
