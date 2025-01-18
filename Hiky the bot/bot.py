@@ -417,31 +417,64 @@ def check_and_send_reminders(context):
                         print(f"Error sending reminder to {telegram_id}: {e}")
 
 def error_handler(update, context):
-    """Gestisce gli errori in modo globale"""
+    """Gestisce gli errori in modo globale con messaggi user-friendly"""
     try:
         raise context.error
     except telegram.error.NetworkError:
-        message = "⚠️ Network error occurred. Please try again."
+        # Errore di rete generico
+        message = (
+            "🤖 Oops! Looks like I had a brief power nap! 😴\n\n"
+            "The server decided to take a coffee break while you were filling out the form. "
+            "I know, bad timing! 🙈\n\n"
+            "Could you use /menu to start again? I promise to stay awake this time! ⚡"
+        )
     except telegram.error.Unauthorized:
         # l'utente ha bloccato il bot
         return
     except telegram.error.TimedOut:
-        message = "⚠️ Request timed out. Please try again."
-    except telegram.error.TelegramError:
-        message = "⚠️ Telegram error occurred. Please try again later."
+        message = (
+            "⏰ Time out! Even robots need a breather sometimes!\n\n"
+            "Let's start fresh with /menu - I'll be quicker this time! 🏃‍♂️"
+        )
+    except telegram.error.BadRequest as e:
+        # Errori di sessione/stato
+        if "Message is not modified" in str(e):
+            # Ignora questi errori specifici
+            return
+        message = (
+            "🤖 *System reboot detected!*\n\n"
+            "Sorry, looks like my circuits got a bit scrambled during a server update. "
+            "These things happen when you're a bot living in the cloud! ☁️\n\n"
+            "Could you help me out by using /menu to start over? "
+            "I promise to keep all my circuits in order this time! 🔧✨"
+        )
     except Exception as e:
-        message = "⚠️ An unexpected error occurred. Please try again later."
         print(f"Unexpected error: {e}")
+        message = (
+            "🤖 *Beep boop... something went wrong!*\n\n"
+            "My processors got a bit tangled up there! 🎭\n"
+            "Let's try again with /menu - second time's the charm! ✨\n\n"
+            "_Note: If this keeps happening, you can always reach out to the hiking group for help!_"
+        )
 
     # Invia messaggio all'utente se possibile
     if update and update.effective_chat:
         try:
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
-                text=message
+                text=message,
+                parse_mode='Markdown'
             )
-        except:
-            pass
+        except Exception as send_error:
+            print(f"Error sending error message: {send_error}")
+            # Tenta un ultimo invio senza markdown se il primo fallisce
+            try:
+                context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=message.replace('*', '').replace('_', '')
+                )
+            except:
+                pass
 
 ## PARTE 2 - Funzioni menu principale
 def menu(update, context):
