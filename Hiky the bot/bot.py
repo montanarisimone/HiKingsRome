@@ -444,7 +444,7 @@ def error_handler(update, context):
             pass
 
 ## PARTE 2 - Funzioni menu principale
-def start(update, context):
+def menu(update, context):
     # Check rate limiting
     if not context.bot_data['rate_limiter'].is_allowed(update.effective_user.id):
         update.message.reply_text(
@@ -493,7 +493,7 @@ def check_future_hikes_availability(query, context, user_id):
     if not available_hikes:
         query.edit_message_text(
             "There are no available hikes at the moment.\n"
-            "Use /start to go back to the home menu."
+            "Use /menu to go back to the home menu."
         )
         return None
 
@@ -804,7 +804,7 @@ def show_my_hikes(update, context):
     if not hikes:
         message.reply_text(
             "You are not registered for any hikes yet.\n"
-            "Use /start to go back to the home menu."
+            "Use /menu to go back to the home menu."
         )
         return ConversationHandler.END
 
@@ -923,7 +923,7 @@ def handle_cancel_confirmation(update, context):
     if not user_rows:
         query.edit_message_text(
             "❌ Something went wrong.\n"
-            "Use /start to go back to the home menu."
+            "Use /menu to go back to the home menu."
         )
         return ConversationHandler.END
 
@@ -949,12 +949,12 @@ def handle_cancel_confirmation(update, context):
     if success:
         query.edit_message_text(
             "✅ Registration successfully cancelled.\n"
-            "Use /start to go back to the home menu."
+            "Use /menu to go back to the home menu."
         )
     else:
         query.edit_message_text(
             "❌ Could not find the registration to cancel.\n"
-            "Use /start to go back to the home menu."
+            "Use /menu to go back to the home menu."
         )
 
     return ConversationHandler.END
@@ -1413,7 +1413,7 @@ def handle_final_choice(update, context):
                         query.edit_message_text(
                             f"❌ Sorry, the hike {selected_hike['name']} is now full.\n"
                             "Please start again and choose another hike.\n"
-                            "Use /start to fill out the form again"
+                            "Use /menu to fill out the form again"
                         )
                         return ConversationHandler.END
 
@@ -1456,7 +1456,7 @@ def handle_final_choice(update, context):
 
             query.edit_message_text(
                 "✅ Thanks for signing up for the next hike.\n"
-                "You can use /start to go back to the home menu."
+                "You can use /menu to go back to the home menu."
             )
 
         except Exception as e:
@@ -1470,7 +1470,7 @@ def handle_final_choice(update, context):
         query.edit_message_text(
             "❌ We are sorry but accepting these rules is necessary to participate in the walks.\n"
             "Thank you for your time.\n"
-            "You can use /start to go back to the home menu."
+            "You can use /menu to go back to the home menu."
         )
 
     return ConversationHandler.END
@@ -1479,7 +1479,7 @@ def cancel(update, context):
     context.user_data.clear()
     update.message.reply_text(
         '❌ Registration cancelled.\n'
-        'You can use /start to go back to the home menu.'
+        'You can use /menu to go back to the home menu.'
     )
     return ConversationHandler.END
 
@@ -1533,13 +1533,13 @@ def main():
 
     conv_handler = ConversationHandler(
         entry_points=[
-            CommandHandler('start', start),
+            CommandHandler('menu', menu),
             MessageHandler(Filters.text & ~Filters.command, handle_invalid_message),
             CallbackQueryHandler(handle_restart_choice, pattern='^restart_')
         ],
         states={
             CHOOSING: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_menu_choice, pattern='^(signup|myhikes|links|back_to_menu)$'),
                 CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)$'),
@@ -1548,91 +1548,91 @@ def main():
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$')
             ],
             REMINDER_CHOICE: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(save_reminder_preference, pattern='^reminder_')
             ],
             NAME: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_name)
             ],
             EMAIL: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_email)
             ],
             PHONE: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_phone)
             ],
             BIRTH_DATE: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_calendar)
             ],
             MEDICAL: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_medical)
             ],
             HIKE_CHOICE: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_hike)
             ],
             EQUIPMENT: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_equipment)
             ],
             CAR_SHARE: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_car_share)
             ],
             LOCATION_CHOICE: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_location_choice)
             ],
             QUARTIERE_CHOICE: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_quartiere_choice)
             ],
             FINAL_LOCATION: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_final_location)
             ],
             CUSTOM_QUARTIERE: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, handle_custom_location)
             ],
             NOTES: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_notes)
             ],
             IMPORTANT_NOTES: [
-                CommandHandler('start', start),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_final_choice)
