@@ -113,8 +113,8 @@ def get_available_hikes(sheet_hikes, sheet_responses, user_id=None):
 
     # Today's date and 2 months limit
     today = datetime.now(rome_tz).date()
-    min_date = today + timedelta(days=2)
-    max_date = today + timedelta(days=60)
+    min_date = today + timedelta(days=2) # the hike must be at least 2 days after today's date
+    max_date = today + timedelta(days=60) # the hike cannot be more than 60 days after today's date
 
     available_hikes = []
 
