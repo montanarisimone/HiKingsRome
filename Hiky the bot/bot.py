@@ -145,44 +145,44 @@ def create_hikes_keyboard(hikes, context):
     for idx, hike in enumerate(hikes):
         available_spots = hike['max_participants'] - hike['current_participants']
         date_str = hike['date'].strftime('%d/%m/%Y')
-
-        # Prima riga: solo la data
+        
+        # Determina l'indicatore di disponibilità
+        if available_spots > 1:
+            spot_indicator = "🟢"
+        elif available_spots == 1:
+            spot_indicator = "🔴"
+        else:
+            spot_indicator = "⚫"
+            
+        # Prima riga: data con indicatore di disponibilità
         keyboard.append([InlineKeyboardButton(
-            f"🗓 {date_str}",
+            f"{spot_indicator} {date_str} ({available_spots}/{hike['max_participants']})",
             callback_data=f'info_hike{idx}_date'
         )])
 
-        # Seconda riga: nome dell'hike
-        keyboard.append([InlineKeyboardButton(
-            f"🏃 {hike['name']}",
-            callback_data=f'info_hike{idx}_name'
-        )])
-
-        # Terza riga: posti disponibili
-        if available_spots > 1:
-            spots_text = f"🟢 {available_spots}/{hike['max_participants']} spots available"
-        elif available_spots == 1:
-            spots_text = f"🔴 Last spot available!"
-        else:
-            spots_text = "⚫ Fully booked"
-
-        keyboard.append([InlineKeyboardButton(
-            spots_text,
-            callback_data=f'info_hike{idx}_spots'
-        )])
-
-        # Quarta riga: bottone di selezione (solo se ci sono posti disponibili)
+        # Seconda riga: nome dell'hike e bottone di selezione (se ci sono posti disponibili)
         if available_spots > 0:
-            select_text = "✓ Select" if idx not in context.user_data.get('selected_hikes', []) else "✓ Selected!"
-            keyboard.append([InlineKeyboardButton(select_text, callback_data=f'select_hike{idx}')])
+            is_selected = idx in context.user_data.get('selected_hikes', [])
+            select_emoji = "☑️" if is_selected else "⬜"
+            keyboard.append([InlineKeyboardButton(
+                f"{select_emoji} {hike['name']}",
+                callback_data=f'select_hike{idx}'
+            )])
+        else:
+            # Se non ci sono posti, mostra solo il nome senza possibilità di selezione
+            keyboard.append([InlineKeyboardButton(
+                f"⚫ {hike['name']}",
+                callback_data='ignore'
+            )])
 
         # Separatore tra gli hike
         if idx < len(hikes) - 1:
-            keyboard.append([InlineKeyboardButton("─────────", callback_data='ignore')])
+            keyboard.append([InlineKeyboardButton("┄┄┄┄┄┄┄", callback_data='ignore')])
 
     # Bottone di conferma alla fine
     keyboard.append([InlineKeyboardButton("✅ Confirm selection", callback_data='confirm_hikes')])
     return InlineKeyboardMarkup(keyboard)
+    
 
 def create_year_selector():
     current_year = date.today().year
@@ -1080,9 +1080,13 @@ def save_medical(update, context):
     reply_markup = create_hikes_keyboard(available_hikes, context)
 
     update.message.reply_text(
-        "🎯 Choose the hike(s) you want to participate in.\n"
-        "Click to select/deselect a hike.\n"
-        "Click '✅ Confirm selection' when done.",
+        "🎯 Choose the hike(s) you want to participate in:\n\n"
+        "🟢 Many spots available\n"
+        "🔴 Last spot available\n"
+        "⚫ Fully booked\n\n"
+        "_Click on the hike name to select/deselect._\n"
+        "_Click '✅ Confirm selection' when done._",
+        parse_mode='Markdown',
         reply_markup=reply_markup
     )
     return HIKE_CHOICE
@@ -1093,13 +1097,39 @@ def handle_hike(update, context):
     query.answer()
 
     # Ignora i click sulle righe informative e sul separatore
-    if query.data.startswith('info_hike') or query.data == 'ignore':
+    if query.data == 'ignore':
+        return HIKE_CHOICE
+
+    if query.data.startswith('info_hike'):
+        # Per click sulla data, mostra un messaggio informativo
+        hike_idx = int(query.data.split('_')[1].replace('hike', ''))
+        hike = context.user_data['available_hikes'][hike_idx]
+        available_spots = hike['max_participants'] - hike['current_participants']
+        
+        if available_spots > 0:
+            query.answer(
+                f"Click on the hike name below to select/deselect",
+                show_alert=False
+            )
+        else:
+            query.answer(
+                "This hike is fully booked",
+                show_alert=True
+            )
         return HIKE_CHOICE
 
     if query.data.startswith('select_hike'):
         hike_idx = int(query.data.replace('select_hike', ''))
         selected_hikes = context.user_data.get('selected_hikes', [])
         available_hikes = context.user_data['available_hikes']
+
+        # Verifica che ci siano ancora posti disponibili
+        hike = available_hikes[hike_idx]
+        available_spots = hike['max_participants'] - hike['current_participants']
+        
+        if available_spots <= 0:
+            query.answer("This hike is fully booked", show_alert=True)
+            return HIKE_CHOICE
 
         if hike_idx in selected_hikes:
             selected_hikes.remove(hike_idx)
@@ -1146,6 +1176,7 @@ def handle_hike(update, context):
             reply_markup=reply_markup
         )
         return EQUIPMENT
+        
 
 ## PARTE 6 - Gestione delle domande finali e salvataggio
 def handle_equipment(update, context):
