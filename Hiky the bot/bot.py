@@ -555,10 +555,26 @@ def restart(update, context):
             "Are you sure you want to restart? All progress will be lost.",
             reply_markup=reply_markup
         )
-        return current_state  # Ritorniamo lo stato corrente invece di CHOOSING
+        return current_state
     
-    # Se non c'è niente da confermare, procedi con il restart
-    return direct_restart(update, context)
+    # Se non c'è form in corso, resetta semplicemente il bot
+    context.user_data.clear()
+    context.chat_data.clear()
+    
+    keyboard = [
+        [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
+        [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
+        [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    update.message.reply_text(
+        "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
+        "How can I assist you?",
+        reply_markup=reply_markup
+    )
+    
+    return CHOOSING
 
 def direct_restart(update, context):
     """Esegue il restart direttamente"""
