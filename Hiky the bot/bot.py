@@ -156,7 +156,7 @@ def create_hikes_keyboard(hikes, context):
             
         # Prima riga: data con indicatore di disponibilità
         keyboard.append([InlineKeyboardButton(
-            f"{spot_indicator} {date_str} ({available_spots}/{hike['max_participants']})",
+            f"🗓 {date_str} - {spot_indicator} {available_spots}/{hike['max_participants']}",
             callback_data=f'info_hike{idx}_date'
         )])
 
