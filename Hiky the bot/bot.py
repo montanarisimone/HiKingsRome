@@ -619,7 +619,13 @@ def handle_restart_confirmation(update, context):
     """Gestisce la conferma del restart"""
     print("Handling restart confirmation")  # Debug print
     query = update.callback_query
-    query.answer()
+
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
     
     if query.data == 'yes_restart':
         try:
@@ -741,7 +747,13 @@ def handle_restart_confirmation(update, context):
 
 def handle_menu_choice(update, context):
     query = update.callback_query
-    query.answer()
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
 
     if not check_user_membership(update, context):
         query.edit_message_text(
@@ -848,7 +860,13 @@ def show_my_hikes(update, context):
 
 def handle_hike_navigation(update, context):
     query = update.callback_query
-    query.answer()
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
 
     if query.data == 'next_hike':
         context.user_data['current_hike_index'] += 1
@@ -908,7 +926,13 @@ def show_hike_details(update, context):
 def handle_cancel_request(update, context):
     """Gestisce la richiesta iniziale di cancellazione"""
     query = update.callback_query
-    query.answer()
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
 
     # Ottieni l'indice dell'hike da cancellare
     hike_index = int(query.data.split('_')[2])
@@ -933,7 +957,13 @@ def handle_cancel_request(update, context):
 
 def handle_cancel_confirmation(update, context):
     query = update.callback_query
-    query.answer()
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
 
     if query.data == 'abort_cancel':
         return show_hike_details(query, context)
@@ -1016,7 +1046,13 @@ def handle_invalid_message(update, context):
 
 def handle_restart_choice(update, context):
     query = update.callback_query
-    query.answer()
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
 
     if query.data == 'restart_yes':
         context.user_data.clear()
@@ -1052,7 +1088,13 @@ def save_phone(update, context):
 def handle_calendar(update, context):
     context.chat_data['last_state'] = BIRTH_DATE
     query = update.callback_query
-    query.answer()
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
 
     data = query.data.split('_')
     action = data[0]
@@ -1124,10 +1166,55 @@ def save_medical(update, context):
     )
     return HIKE_CHOICE
 
+def handle_lost_conversation(update, context):
+    """Gestisce i casi in cui lo stato della conversazione è stato perso"""
+    message = (
+        "🤖 *Oops! Server Update Detected!* 🔄\n\n"
+        "Hey there! While you were filling out the form, I received some fancy new updates. "
+        "Unfortunately, that means I lost track of where we were... 😅\n\n"
+        "Could you help me out by starting fresh with /menu? "
+        "I promise to keep all your answers safe this time! 🚀\n\n"
+        "_P.S. Sorry for the interruption - even robots need occasional upgrades!_ ✨"
+    )
+    
+    try:
+        # Se è una callback query, rispondi alla query per evitare il simbolo di caricamento
+        if isinstance(update, telegram.Update) and update.callback_query:
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(
+                text=message,
+                parse_mode='Markdown'
+            )
+        else:
+            # Se è un messaggio normale
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=message,
+                parse_mode='Markdown'
+            )
+    except Exception as e:
+        print(f"Error in handle_lost_conversation: {e}")
+        # Fallback senza markdown se necessario
+        try:
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=message.replace('*', '').replace('_', '')
+            )
+        except:
+            pass
+    
+    return ConversationHandler.END
+
 def handle_hike(update, context):
     context.chat_data['last_state'] = HIKE_CHOICE
     query = update.callback_query
-    query.answer()
+
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
 
     # Ignora i click sulle righe informative e sul separatore
     if query.data == 'ignore':
@@ -1215,7 +1302,13 @@ def handle_hike(update, context):
 def handle_equipment(update, context):
     context.chat_data['last_state'] = EQUIPMENT
     query = update.callback_query
-    query.answer()
+
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
 
     context.user_data['equipment'] = 'Yes' if query.data == 'yes_eq' else 'No'
 
@@ -1240,7 +1333,13 @@ def handle_equipment(update, context):
 def handle_car_share(update, context):
     context.chat_data['last_state'] = CAR_SHARE
     query = update.callback_query
-    query.answer()
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
 
     context.user_data['car_share'] = 'Yes' if query.data == 'yes_car' else 'No'
 
@@ -1308,7 +1407,13 @@ def handle_location_choice(update, context):
 
 def handle_quartiere_choice(update, context):
     query = update.callback_query
-    query.answer()
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
     
     municipio = query.data.replace('mun_', '')
     context.user_data['selected_municipio'] = municipio
@@ -1334,7 +1439,13 @@ def handle_quartiere_choice(update, context):
 
 def handle_final_location(update, context):
     query = update.callback_query
-    query.answer()
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
     
     if query.data == 'back_municipi':
         return handle_location_choice(update, context)
@@ -1383,7 +1494,13 @@ def handle_custom_location(update, context):
 
 def handle_reminder_preferences(update, context):
     query = update.callback_query
-    query.answer()
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
 
     keyboard = [
         [InlineKeyboardButton("7 days before", callback_data='reminder_7')],
@@ -1405,7 +1522,13 @@ def handle_reminder_preferences(update, context):
 def save_reminder_preference(update, context):
     context.chat_data['last_state'] = REMINDER_CHOICE
     query = update.callback_query
-    query.answer()
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
 
     reminder_choice = query.data.replace('reminder_', '')
     reminder_mapping = {
@@ -1458,7 +1581,13 @@ def save_notes(update, context):
 
 def handle_final_choice(update, context):
     query = update.callback_query
-    query.answer()
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
 
     if query.data == 'accept':
         # Get fresh count of participants before saving
