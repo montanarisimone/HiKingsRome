@@ -13,6 +13,7 @@ import requests
 import os
 from collections import defaultdict
 from utils.keyboards import KeyboardBuilder
+import json
 
 
 class RateLimiter:
@@ -63,7 +64,8 @@ rome_tz = pytz.timezone('Europe/Rome')
 def setup_google_sheets():
     scope = ['https://spreadsheets.google.com/feeds',
              'https://www.googleapis.com/auth/drive']
-    credentials = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
+    credentials_info = json.loads(os.getenv('GOOGLE_CREDENTIALS'))
+    credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_info, scope)
     client = gspread.authorize(credentials)
 
     # Get sheet ID from environment variable
