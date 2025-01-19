@@ -64,8 +64,16 @@ rome_tz = pytz.timezone('Europe/Rome')
 def setup_google_sheets():
     scope = ['https://spreadsheets.google.com/feeds',
              'https://www.googleapis.com/auth/drive']
-    credentials_info = json.loads(os.getenv('GOOGLE_CREDENTIALS'))
+    
+    credentials_json = os.getenv('GOOGLE_CREDENTIALS')
+    if not credentials_json:
+        raise ValueError("La variabile d'ambiente GOOGLE_CREDENTIALS non è stata trovata o è vuota")
+
+    # Caricamento delle credenziali JSON in un dizionario
+    credentials_info = json.loads(credentials_json)
+    
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_info, scope)
+    
     client = gspread.authorize(credentials)
 
     # Get sheet ID from environment variable
