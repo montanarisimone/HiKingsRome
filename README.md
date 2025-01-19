@@ -24,7 +24,7 @@ Anything else that helps us organize hikes, stay connected, and make HiKingsRome
 🤷‍♂️ Why Did I Build This?  
 Because organizing a hiking group can be more exhausting than climbing a mountain! With HiKingsRome, I wanted to combine my love for nature with a bit of tech to make things easier for everyone.
 
-Also, let’s be clear: I’m not a professional programmer. These scripts were cobbled together with the help of AI (shoutout to Claude!) and a whole lot of trial and error. So if you spot some messy code, remember—I’m better at picking hiking trails than writing elegant algorithms.
+Also, let’s be clear: I’m not a professional programmer. These scripts were cobbled together with the help of AI (shoutout to [Claude](https://claude.ai/)!) and a whole lot of trial and error. So if you spot some messy code, remember—I’m better at picking hiking trails than writing elegant algorithms.
 
 🖇️ Contributing
 Feel free to explore, laugh at the code, and contribute if you’d like! Whether you’re here to improve a script, fix a bug, or just get inspired for your own hiking group, you’re welcome to join the journey
