@@ -26,7 +26,7 @@ Because organizing a hiking group can be more exhausting than climbing a mountai
 
 Also, let’s be clear: I’m not a professional programmer. These scripts were cobbled together with the help of AI (shoutout to [Claude](https://claude.ai/)!) and a whole lot of trial and error. So if you spot some messy code, remember—I’m better at picking hiking trails than writing elegant algorithms.
 
-🖇️ Contributing
+🖇️ Contributing  
 Feel free to explore, laugh at the code, and contribute if you’d like! Whether you’re here to improve a script, fix a bug, or just get inspired for your own hiking group, you’re welcome to join the journey
 
 Useful links:
