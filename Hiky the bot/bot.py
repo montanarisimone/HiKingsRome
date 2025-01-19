@@ -14,10 +14,7 @@ import os
 from collections import defaultdict
 from utils.keyboards import KeyboardBuilder
 import json
-############
-port = int(os.environ.get("PORT", 5000))
-print(f"Server running on port {port}")
-################
+
 
 class RateLimiter:
     def __init__(self, max_requests=5, time_window=60):  # 5 richieste per minuto
