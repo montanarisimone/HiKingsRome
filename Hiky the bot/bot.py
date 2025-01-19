@@ -65,16 +65,9 @@ def setup_google_sheets():
     scope = ['https://spreadsheets.google.com/feeds',
              'https://www.googleapis.com/auth/drive']
     
-    credentials_json = os.getenv('GOOGLE_CREDENTIALS')
-    if not credentials_json:
-        raise ValueError("La variabile d'ambiente GOOGLE_CREDENTIALS non è stata trovata o è vuota")
-
-    # Caricamento delle credenziali JSON in un dizionario
-    credentials_json = credentials_json.replace('\\n', '\n').replace('\\"', '"')
-
-    credentials_info = json.loads(credentials_json)
+    credentials_path = '/home/hikingsrome/google_credentials.json'
     
-    credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_info, scope)
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_path, scope)
     
     client = gspread.authorize(credentials)
 
