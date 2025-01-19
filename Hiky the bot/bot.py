@@ -70,6 +70,8 @@ def setup_google_sheets():
         raise ValueError("La variabile d'ambiente GOOGLE_CREDENTIALS non è stata trovata o è vuota")
 
     # Caricamento delle credenziali JSON in un dizionario
+    credentials_json = credentials_json.replace('\\n', '\n').replace('\\"', '"')
+
     credentials_info = json.loads(credentials_json)
     
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_info, scope)
