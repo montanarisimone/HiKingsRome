@@ -14,7 +14,25 @@ import os
 from collections import defaultdict
 from utils.keyboards import KeyboardBuilder
 import json
+############
+from flask import Flask
+import threading
 
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!", 200
+
+def run_bot():
+    # Qui va il codice di avvio del tuo bot
+    import Hikybot
+    Hikybot.main()
+
+if __name__ == "__main__":
+    threading.Thread(target=run_bot).start()
+    app.run(host='0.0.0.0', port=8080)
+################
 
 class RateLimiter:
     def __init__(self, max_requests=5, time_window=60):  # 5 richieste per minuto
