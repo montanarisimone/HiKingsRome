@@ -12,6 +12,7 @@ import pytz
 import requests
 import os
 from collections import defaultdict
+from utils.keyboards import KeyboardBuilder
 
 
 class RateLimiter:
@@ -39,7 +40,7 @@ def check_user_membership(update, context):
     PRIVATE_GROUP_ID = os.environ.get('TELEGRAM_GROUP_ID') # ID come stringa
     if not PRIVATE_GROUP_ID:
         raise ValueError("No telegram group ID provided")
-        
+
     user_id = update.effective_user.id
     try:
         member = context.bot.get_chat_member(PRIVATE_GROUP_ID, user_id)
@@ -53,7 +54,7 @@ def check_user_membership(update, context):
 # Stati della conversazione
 (CHOOSING, NAME, EMAIL, PHONE, BIRTH_DATE, MEDICAL, HIKE_CHOICE, EQUIPMENT,
  CAR_SHARE, LOCATION_CHOICE, QUARTIERE_CHOICE, FINAL_LOCATION, CUSTOM_QUARTIERE,
- ELSEWHERE, NOTES, IMPORTANT_NOTES, REMINDER_CHOICE) = range(17)
+ ELSEWHERE, NOTES, IMPORTANT_NOTES, REMINDER_CHOICE, PRIVACY_CONSENT) = range(18)
 
 # Definisci il fuso orario di Roma
 rome_tz = pytz.timezone('Europe/Rome')
@@ -70,10 +71,60 @@ def setup_google_sheets():
     if not SHEET_ID:
         raise ValueError("No Google Sheet ID provided")
 
-    # Open both sheets
-    sheet_responses = client.open_by_key(SHEET_ID).worksheet('Registrazioni')
-    sheet_hikes = client.open_by_key(SHEET_ID).worksheet('ProssimeUscite')
-    return sheet_responses, sheet_hikes
+    # Definizione dei campi privacy
+    privacy_fields = [
+        'Timestamp',
+        'Telegram_ID',
+        'basic_consent',         # Obbligatorio
+        'car_sharing_consent',   # Opzionale
+        'photo_consent',        # Opzionale
+        'marketing_consent',    # Opzionale
+        'last_updated',         # Per tracciare modifiche
+        'consent_version'       # Per gestire aggiornamenti policy
+    ]
+
+    spreadsheet = client.open_by_key(SHEET_ID)
+
+    # Apri i fogli esistenti
+    sheet_responses = spreadsheet.worksheet('Registrazioni')
+    sheet_hikes = spreadsheet.worksheet('ProssimeUscite')
+
+    try:
+        # Prova ad aprire il foglio Privacy
+        sheet_privacy = spreadsheet.worksheet('Privacy')
+        # Verifica che i campi siano corretti
+        headers = sheet_privacy.row_values(1)
+        if headers != privacy_fields:
+            # Aggiorna i campi se necessario
+            sheet_privacy.clear()
+            sheet_privacy.append_row(privacy_fields)
+    except gspread.exceptions.WorksheetNotFound:
+        # Se il foglio non esiste, crealo
+        sheet_privacy = spreadsheet.add_worksheet('Privacy', 1, len(privacy_fields))
+        sheet_privacy.append_row(privacy_fields)
+
+    return sheet_responses, sheet_hikes, sheet_privacy
+
+def check_privacy_consent(sheet_privacy, user_id):
+    """Verifica se l'utente ha già dato il consenso privacy"""
+    try:
+        privacy_records = sheet_privacy.get_all_records()
+        print(f"Privacy records: {privacy_records}")
+        for record in privacy_records:
+            if str(record['Telegram_ID']) == str(user_id):
+                print(f"Privacy record for user {user_id}: {record}")
+                # Converti i valori in booleani
+                return {
+                    'basic_consent': record.get('basic_consent', 'FALSE') == 'TRUE',
+                    'car_sharing_consent': record.get('car_sharing_consent', 'FALSE') == 'TRUE',
+                    'photo_consent': record.get('photo_consent', 'FALSE') == 'TRUE',
+                    'marketing_consent': record.get('marketing_consent', 'FALSE') == 'TRUE',
+                    'Telegram_ID': record['Telegram_ID']
+                }
+        return None
+    except Exception as e:
+        print(f"Error checking privacy consent: {e}")
+        return None
 
 def get_available_hikes(sheet_hikes, sheet_responses, user_id=None):
     """Gets available hikes from ProssimeUscite sheet and counts current participants"""
@@ -145,7 +196,7 @@ def create_hikes_keyboard(hikes, context):
     for idx, hike in enumerate(hikes):
         available_spots = hike['max_participants'] - hike['current_participants']
         date_str = hike['date'].strftime('%d/%m/%Y')
-        
+
         # Determina l'indicatore di disponibilità
         if available_spots > 1:
             spot_indicator = "🟢"
@@ -153,7 +204,7 @@ def create_hikes_keyboard(hikes, context):
             spot_indicator = "🔴"
         else:
             spot_indicator = "⚫"
-            
+
         # Prima riga: data con indicatore di disponibilità
         keyboard.append([InlineKeyboardButton(
             f"🗓 {date_str} - {spot_indicator} {available_spots}/{hike['max_participants']}",
@@ -182,13 +233,13 @@ def create_hikes_keyboard(hikes, context):
     # Bottone di conferma alla fine
     keyboard.append([InlineKeyboardButton("✅ Confirm selection", callback_data='confirm_hikes')])
     return InlineKeyboardMarkup(keyboard)
-    
+
 
 def create_year_selector():
     current_year = date.today().year
     current_month = date.today().month
     current_day = date.today().day
-    
+
     keyboard = []
     decades = list(range(1980, (current_year - 18) + 1, 10))
     for i in range(0, len(decades), 2):
@@ -220,7 +271,7 @@ def create_month_buttons(year):
     keyboard = []
     current_date = date.today()
     limit_date = date(current_date.year - 18, current_date.month, current_date.day)
-    
+
     if year == limit_date.year:
         max_month = limit_date.month
     else:
@@ -234,7 +285,7 @@ def create_month_buttons(year):
                 callback_data=f'month_{year}_{month}'
             ))
         keyboard.append(row)
-    
+
     return InlineKeyboardMarkup(keyboard)
 
 def create_calendar(year, month):
@@ -418,10 +469,14 @@ def check_and_send_reminders(context):
 
 def error_handler(update, context):
     """Gestisce gli errori in modo globale con messaggi user-friendly"""
+    print("\nError occurred:")  # Log errore
+    print(f"Update: {update}")  # Log update che ha causato l'errore
+    print(f"Error: {context.error}")
     try:
         raise context.error
     except telegram.error.NetworkError:
         # Errore di rete generico
+        print("Network error")
         message = (
             "🤖 Oops! Looks like I had a brief power nap! 😴\n\n"
             "The server decided to take a coffee break while you were filling out the form. "
@@ -430,14 +485,17 @@ def error_handler(update, context):
         )
     except telegram.error.Unauthorized:
         # l'utente ha bloccato il bot
+        print("Unauthorized error")
         return
     except telegram.error.TimedOut:
         message = (
             "⏰ Time out! Even robots need a breather sometimes!\n\n"
             "Let's start fresh with /menu - I'll be quicker this time! 🏃‍♂️"
         )
+        print("Timeout error")
     except telegram.error.BadRequest as e:
         # Errori di sessione/stato
+        print(f"BadRequest error: {str(e)}")
         if "Message is not modified" in str(e):
             # Ignora questi errori specifici
             return
@@ -476,37 +534,113 @@ def error_handler(update, context):
             except:
                 pass
 
+def cmd_privacy(update, context):
+    """Gestisce il comando /privacy"""
+    user_id = update.effective_user.id
+    privacy_record = check_privacy_consent(context.bot_data['sheet_privacy'], user_id)
+
+    if privacy_record:
+        # Se l'utente ha già dato il consenso, mostra lo stato attuale
+        message = (
+            "🔐 *Your current privacy settings:*\n\n"
+            f"• Basic consent (Required): ✅\n"
+            f"• Share contacts for car sharing: {'✅' if privacy_record.get('car_sharing_consent') else '❌'}\n"
+            f"• Photo sharing consent: {'✅' if privacy_record.get('photo_consent') else '❌'}\n"
+            f"• Marketing communications: {'✅' if privacy_record.get('marketing_consent') else '❌'}\n\n"
+            "Would you like to modify these settings?"
+        )
+
+        keyboard = [
+            [InlineKeyboardButton("✏️ Modify settings", callback_data='privacy_modify')],
+            [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
+        ]
+    else:
+        # Se l'utente non ha mai dato il consenso
+        message = (
+            "🔐 *Privacy Policy*\n\n"
+            "Please review our privacy policy and provide your consent preferences.\n\n"
+            "*Required consent:*\n"
+            "• Collection of basic data for hike registration\n"
+            "• Emergency contact information\n"
+            "• Age verification\n\n"
+            "*Optional consents:*\n"
+            "• Share contacts for car sharing arrangements\n"
+            "• Photo sharing during hikes\n"
+            "• Marketing communications"
+        )
+
+        keyboard = [
+            [InlineKeyboardButton("📜 View full policy", url="https://www.hikingsrome.com/privacy")],
+            [InlineKeyboardButton("✅ Set privacy preferences", callback_data='privacy_start')]
+        ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    return PRIVACY_CONSENT
+
 ## PARTE 2 - Funzioni menu principale
 def menu(update, context):
+    print("\n🚀 MENU CHIAMATO")
+    print(f"Chat ID: {update.effective_chat.id}")
+    print(f"User ID: {update.effective_user.id}")
+    print(f"Current state: {context.chat_data.get('last_state')}")
+
+    user_id = update.effective_user.id
+
+    # Verifica se l'utente ha già dato il consenso privacy
+    privacy_status = check_privacy_consent(context.bot_data['sheet_privacy'], user_id)
+
+    if not privacy_status:
+        # Se non ha mai dato il consenso, mostra prima la privacy policy
+        return cmd_privacy(update, context)
+
     # Check rate limiting
     if not context.bot_data['rate_limiter'].is_allowed(update.effective_user.id):
-        update.message.reply_text(
-            "⚠️ You're making too many requests. Please wait a minute and try again."
-        )
+        if update.callback_query:
+            update.callback_query.answer("Too many requests. Please wait a minute.")
+            update.callback_query.edit_message_text(
+                "⚠️ You're making too many requests. Please wait a minute and try again."
+            )
+        else:
+            update.message.reply_text(
+                "⚠️ You're making too many requests. Please wait a minute and try again."
+            )
         return ConversationHandler.END
 
     # check appartenenza al gruppo
     if not check_user_membership(update, context):
-        update.message.reply_text(
-            "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
-            "Request access to the group and try again!"
-        )
+        if update.callback_query:
+            update.callback_query.edit_message_text(
+                "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
+                "Request access to the group and try again!"
+            )
+        else:
+            update.message.reply_text(
+                "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
+                "Request access to the group and try again!"
+            )
         return ConversationHandler.END
 
+    print("Clearing user_data")
     context.user_data.clear()
+    context.chat_data.clear()
 
-    keyboard = [
-        [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
-        [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
-        [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = KeyboardBuilder.create_menu_keyboard()
 
-    update.message.reply_text(
-        "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
-        "How can I assist you?",
-        reply_markup=reply_markup
-    )
+    print("Sending menu message")
+    if update.callback_query:
+        update.callback_query.edit_message_text(
+            "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
+            "How can I assist you?",
+            reply_markup=reply_markup
+        )
+    else:
+        update.message.reply_text(
+            "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
+            "How can I assist you?",
+            reply_markup=reply_markup
+        )
+
     return CHOOSING
 
 def check_future_hikes_availability(query, context, user_id):
@@ -534,46 +668,66 @@ def check_future_hikes_availability(query, context, user_id):
 
 def restart(update, context):
     """Comando per resettare il bot"""
-    print("Restart command received")  # Debug print
+    print("\n🔄 RESTART CHIAMATO")
+    print(f"Chat ID: {update.effective_chat.id}")
+    print(f"User ID: {update.effective_user.id}")
+    print(f"Current state: {context.chat_data.get('last_state')}")
     user_id = update.effective_user.id
+    print(f"User ID: {user_id}")
     current_state = context.chat_data.get('last_state')
-    
+    print(f"Current state: {current_state}")
+
     # Se l'utente stava compilando il form, chiedi conferma
-    if current_state in [NAME, EMAIL, PHONE, BIRTH_DATE, MEDICAL, HIKE_CHOICE, EQUIPMENT, 
-                        CAR_SHARE, LOCATION_CHOICE, QUARTIERE_CHOICE, FINAL_LOCATION, 
+    if current_state in [NAME, EMAIL, PHONE, BIRTH_DATE, MEDICAL, HIKE_CHOICE, EQUIPMENT,
+                        CAR_SHARE, LOCATION_CHOICE, QUARTIERE_CHOICE, FINAL_LOCATION,
                         CUSTOM_QUARTIERE, NOTES, REMINDER_CHOICE]:
-        keyboard = [
-            [
-                InlineKeyboardButton("Yes ✅", callback_data='yes_restart'),
-                InlineKeyboardButton("No ❌", callback_data='no_restart')
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
+        print("User in form - asking confirmation")
+        reply_markup = KeyboardBuilder.create_yes_no_keyboard('yes_restart', 'no_restart')
+
         update.message.reply_text(
             "⚠️ You are in the middle of registration.\n"
             "Are you sure you want to restart? All progress will be lost.",
             reply_markup=reply_markup
         )
         return current_state
-    
+
     # Se non c'è form in corso, resetta semplicemente il bot
+    print("No form in progress - resetting bot")
     context.user_data.clear()
     context.chat_data.clear()
-    
-    keyboard = [
-        [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
-        [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
-        [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
-    update.message.reply_text(
-        "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
-        "How can I assist you?",
-        reply_markup=reply_markup
-    )
-    
+    try:
+        # Prima elimina il messaggio precedente se possibile
+        try:
+            if update.callback_query:
+                update.callback_query.message.delete()
+            else:
+                # Tenta di eliminare il messaggio precedente (potrebbe non essere possibile)
+                context.bot.delete_message(
+                    chat_id=update.message.chat_id,
+                    message_id=update.message.message_id - 1
+                )
+        except:
+            pass
+
+        reply_markup = KeyboardBuilder.create_menu_keyboard()
+
+        update.message.reply_text(
+            "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
+            "How can I assist you?",
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        print(f"Error in restart: {e}")
+        # Fallback in caso di errore
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
+                 "How can I assist you?",
+            reply_markup=reply_markup
+        )
+
+    print("✅ RESTART: Ritorno stato CHOOSING")
     return CHOOSING
 
 def direct_restart(update, context):
@@ -581,7 +735,7 @@ def direct_restart(update, context):
     print("Executing direct restart")  # Debug print
     context.user_data.clear()
     context.chat_data.clear()
-    
+
     keyboard = [
         [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
         [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
@@ -628,7 +782,7 @@ def direct_restart(update, context):
                 )
         except:
             pass
-            
+
     return CHOOSING
 
 def handle_restart_confirmation(update, context):
@@ -642,7 +796,7 @@ def handle_restart_confirmation(update, context):
         if "Query is too old" in str(e) or "Message is not modified" in str(e):
             return handle_lost_conversation(update, context)
         raise
-    
+
     if query.data == 'yes_restart':
         try:
             query.message.delete()  # Elimina il messaggio di conferma
@@ -757,27 +911,249 @@ def handle_restart_confirmation(update, context):
                 )
             except:
                 pass
-        
+
         return current_state
+
+def create_privacy_settings_keyboard(current_choices):
+    """Crea la tastiera per le impostazioni privacy"""
+    keyboard = [
+        [InlineKeyboardButton(
+            f"Share contacts for car sharing: {'✅' if current_choices['car_sharing_consent'] else '❌'}",
+            callback_data='privacy_carsharing'
+        )],
+        [InlineKeyboardButton(
+            f"Photo sharing: {'✅' if current_choices['photo_consent'] else '❌'}",
+            callback_data='privacy_photos'
+        )],
+        [InlineKeyboardButton(
+            f"Marketing communications: {'✅' if current_choices['marketing_consent'] else '❌'}",
+            callback_data='privacy_marketing'
+        )],
+        [InlineKeyboardButton("💾 Save preferences", callback_data='privacy_save')],
+        [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def handle_privacy_choices(update, context):
+    query = update.callback_query
+    choice = query.data.replace('privacy_', '')
+    print(f"Privacy choice: {choice}")
+
+    if choice == 'start' or choice == 'modify':
+        # Inizializza le scelte base
+        privacy_record = check_privacy_consent(context.bot_data['sheet_privacy'], query.from_user.id)
+
+        # Inizializza le scelte basandosi sul record esistente se presente
+        context.user_data['privacy_choices'] = {
+            'basic_consent': True,  # Sempre true, obbligatorio
+            'car_sharing_consent': privacy_record.get('car_sharing_consent', False) if privacy_record else False,
+            'photo_consent': privacy_record.get('photo_consent', False) if privacy_record else False,
+            'marketing_consent': privacy_record.get('marketing_consent', False) if privacy_record else False
+        }
+
+        message_text = (
+            "🔐 *Privacy Settings*\n\n"
+            "Basic consent is required and includes:\n"
+            "• Collection of basic data for registration\n"
+            "• Emergency contact information\n"
+            "• Age verification\n\n"
+            "Optional consents (click to toggle):"
+        )
+
+        # Crea la tastiera con le opzioni
+        keyboard = [
+            [InlineKeyboardButton(
+                f"Share contacts for car sharing {'✅' if context.user_data['privacy_choices']['car_sharing_consent'] else '❌'}",
+                callback_data='privacy_carsharing'
+            )],
+            [InlineKeyboardButton(
+                f"Photo sharing {'✅' if context.user_data['privacy_choices']['photo_consent'] else '❌'}",
+                callback_data='privacy_photos'
+            )],
+            [InlineKeyboardButton(
+                f"Marketing communications {'✅' if context.user_data['privacy_choices']['marketing_consent'] else '❌'}",
+                callback_data='privacy_marketing'
+            )],
+            [InlineKeyboardButton("💾 Save preferences", callback_data='privacy_save')]
+        ]
+
+        try:
+            query.edit_message_text(
+                text=message_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        except telegram.error.BadRequest as e:
+            if "Message is not modified" not in str(e):
+                raise
+
+        return PRIVACY_CONSENT
+
+    elif choice in ['carsharing', 'photos', 'marketing']:
+        print("Processing toggle choice")
+        # Inizializza privacy_choices se non esiste
+        if 'privacy_choices' not in context.user_data:
+            print("Initializing privacy choices")
+            privacy_record = check_privacy_consent(context.bot_data['sheet_privacy'], query.from_user.id)
+            context.user_data['privacy_choices'] = {
+                'basic_consent': True,  # Questo rimane True perché è obbligatorio
+                'car_sharing_consent': privacy_record.get('car_sharing_consent', False) if privacy_record else False,
+                'photo_consent': privacy_record.get('photo_consent', False) if privacy_record else False,
+                'marketing_consent': privacy_record.get('marketing_consent', False) if privacy_record else False
+            }
+            if privacy_record:
+                context.user_data['privacy_choices'].update({
+                    'car_sharing_consent': privacy_record.get('car_sharing_consent', False),
+                    'photo_consent': privacy_record.get('photo_consent', False),
+                    'marketing_consent': privacy_record.get('marketing_consent', False),
+                })
+
+        # Toggle del consenso specifico
+        consent_mapping = {
+            'carsharing': 'car_sharing_consent',
+            'photos': 'photo_consent',
+            'marketing': 'marketing_consent'
+        }
+        consent_key = consent_mapping[choice]
+        current_value = context.user_data['privacy_choices'][consent_key]
+        context.user_data['privacy_choices'][consent_key] = not current_value
+        print(f"Toggled {consent_key} from {current_value} to {not current_value}")
+
+
+        keyboard = [
+            [InlineKeyboardButton(
+                f"Share contacts for car sharing {'✅' if context.user_data['privacy_choices']['car_sharing_consent'] else '❌'}",
+                callback_data='privacy_carsharing'
+            )],
+            [InlineKeyboardButton(
+                f"Photo sharing {'✅' if context.user_data['privacy_choices']['photo_consent'] else '❌'}",
+                callback_data='privacy_photos'
+            )],
+            [InlineKeyboardButton(
+                f"Marketing communications {'✅' if context.user_data['privacy_choices']['marketing_consent'] else '❌'}",
+                callback_data='privacy_marketing'
+            )],
+            [InlineKeyboardButton("💾 Save preferences", callback_data='privacy_save')]
+        ]
+
+        print("Current privacy choices:", context.user_data['privacy_choices'])
+        print("Attempting to update message")
+
+        try:
+            query.edit_message_text(
+                text="🔐 *Privacy Settings*\n\n"
+                     "Basic consent is required and includes:\n"
+                     "• Collection of basic data for registration\n"
+                     "• Emergency contact information\n"
+                     "• Age verification\n\n"
+                     "Optional consents (click to toggle):",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+            print("Successfully updated message")
+        except telegram.error.BadRequest as e:
+            if "Message is not modified" in str(e):
+                print("Message was not modified, trying to force update")
+                # Forza l'aggiornamento aggiungendo un carattere invisibile
+                query.edit_message_text(
+                    text="🔐 *Privacy Settings*\n\n"
+                         "Basic consent is required and includes:\n"
+                         "• Collection of basic data for registration\n"
+                         "• Emergency contact information\n"
+                         "• Age verification\n\n"
+                         "Optional consents (click to toggle):\u200B",  # Carattere invisibile aggiunto
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+            else:
+                print(f"Error updating message: {e}")
+
+        return PRIVACY_CONSENT
+
+    elif choice == 'save':
+        try:
+            sheet_privacy = context.bot_data['sheet_privacy']
+            choices = context.user_data['privacy_choices']
+            timestamp = datetime.now(rome_tz).strftime("%Y-%m-%d %H:%M:%S")
+
+            # Cerca record esistente
+            user_id = str(query.from_user.id)
+            privacy_record = check_privacy_consent(sheet_privacy, user_id)
+
+            row_data = [
+                timestamp,                            # Timestamp
+                user_id,                             # Telegram_ID
+                'TRUE',                              # basic_consent (sempre True)
+                'TRUE' if choices.get('car_sharing_consent', False) else 'FALSE',
+                'TRUE' if choices.get('photo_consent', False) else 'FALSE',
+                'TRUE' if choices.get('marketing_consent', False) else 'FALSE',
+                timestamp,                           # last_updated
+                '1.0'                                # consent_version
+            ]
+
+            if privacy_record:
+                # Trova la riga del record esistente
+                all_records = sheet_privacy.get_all_records()
+                row_num = next(i for i, record in enumerate(all_records, start=2)
+                             if str(record['Telegram_ID']) == user_id)
+
+                # Aggiorna riga esistente
+                for col, value in enumerate(row_data, start=1):
+                    sheet_privacy.update_cell(row_num, col, str(value))
+            else:
+                # Aggiungi nuovo record
+                sheet_privacy.append_row(row_data)
+
+            # Mostra messaggio di conferma
+            keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+
+            message = (
+                "✅ Privacy settings saved successfully!\n\n"
+                "*Your current settings:*\n"
+                "• Basic consent (Required): ✅\n"
+                f"• Share contacts for car sharing: {'✅' if choices.get('car_sharing_consent') else '❌'}\n"
+                f"• Photo sharing: {'✅' if choices.get('photo_consent') else '❌'}\n"
+                f"• Marketing communications: {'✅' if choices.get('marketing_consent') else '❌'}"
+            )
+
+            query.edit_message_text(
+                text=message,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+
+            return CHOOSING
+
+        except Exception as e:
+            print(f"Error saving privacy choices: {e}")
+            query.answer("Error saving preferences. Please try again.", show_alert=True)
+            return PRIVACY_CONSENT
+
+    return CHOOSING
 
 
 def handle_menu_choice(update, context):
+    print("handle_menu_choice() called")
     query = update.callback_query
-    
+    print(f"handle_menu_choice chiamato con data: {query.data}")
+
     try:
         query.answer()
     except telegram.error.BadRequest as e:
+        print(f"Error in query.answer(): {e}")
         if "Query is too old" in str(e) or "Message is not modified" in str(e):
             return handle_lost_conversation(update, context)
         raise
 
     if not check_user_membership(update, context):
+        print(f"User {query.from_user.id} not in group")
         query.edit_message_text(
             "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
             "Request access to the group and try again!"
         )
         return ConversationHandler.END
 
+    print(f"Processing menu choice: {query.data}")
     if query.data == 'signup':
         # Controlla disponibilità hike prima di iniziare il questionario
         available_hikes = check_future_hikes_availability(query, context, query.from_user.id)
@@ -876,7 +1252,7 @@ def show_my_hikes(update, context):
 
 def handle_hike_navigation(update, context):
     query = update.callback_query
-    
+
     try:
         query.answer()
     except telegram.error.BadRequest as e:
@@ -900,21 +1276,7 @@ def show_hike_details(update, context):
     keyboard = []
 
     # Bottoni precedente/successivo
-    nav_buttons = []
-    if current_index > 0:
-        nav_buttons.append(InlineKeyboardButton("⬅️ Previous", callback_data='prev_hike'))
-    if current_index < len(hikes) - 1:
-        nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data='next_hike'))
-    if nav_buttons:
-        keyboard.append(nav_buttons)
-
-    # Bottone per la cancellazione
-    keyboard.append([InlineKeyboardButton("❌ Cancel registration", callback_data=f'cancel_hike_{current_index}')])
-
-    # Bottone per tornare al menu
-    keyboard.append([InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')])
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = KeyboardBuilder.create_hike_navigation_keyboard(current_index, len(hikes))
 
     # Prepara il messaggio
     message_text = (
@@ -942,7 +1304,7 @@ def show_hike_details(update, context):
 def handle_cancel_request(update, context):
     """Gestisce la richiesta iniziale di cancellazione"""
     query = update.callback_query
-    
+
     try:
         query.answer()
     except telegram.error.BadRequest as e:
@@ -955,13 +1317,7 @@ def handle_cancel_request(update, context):
     hike = context.user_data['my_hikes'][hike_index]
     context.user_data['hike_to_cancel'] = hike  # Salva l'hike da cancellare
 
-    keyboard = [
-        [
-            InlineKeyboardButton("Yes ✅", callback_data='confirm_cancel'),
-            InlineKeyboardButton("No ❌", callback_data='abort_cancel')
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = KeyboardBuilder.create_yes_no_keyboard('confirm_cancel', 'abort_cancel')
 
     query.edit_message_text(
         f"Are you sure you want to cancel your registration for:\n\n"
@@ -973,7 +1329,7 @@ def handle_cancel_request(update, context):
 
 def handle_cancel_confirmation(update, context):
     query = update.callback_query
-    
+
     try:
         query.answer()
     except telegram.error.BadRequest as e:
@@ -1008,20 +1364,20 @@ def handle_cancel_confirmation(update, context):
 
     # Formato dell'hike da cancellare
     hike_to_remove = f"{hike_to_cancel['date'].strftime('%d/%m/%Y')} - {hike_to_cancel['name']}"
-    
+
     success = False
     for row_data in user_rows:
         if hike_to_remove in row_data['hikes']:
             # Rimuovi l'hike dalla lista
             new_hikes = [h for h in row_data['hikes'] if h and h != hike_to_remove]
-            
+
             if new_hikes:
                 # Se ci sono ancora altri hike, aggiorna la riga
                 sheet_responses.update_cell(row_data['row'], 8, '; '.join(new_hikes))
             else:
                 # Se non ci sono più hike, elimina l'intera riga
                 sheet_responses.delete_rows(row_data['row'])
-            
+
             success = True
             break
 
@@ -1047,13 +1403,7 @@ def handle_invalid_message(update, context):
         )
         return ConversationHandler.END
 
-    keyboard = [
-        [
-            InlineKeyboardButton("Yes ✅", callback_data='restart_yes'),
-            InlineKeyboardButton("No ❌", callback_data='restart_no')
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = KeyboardBuilder.create_yes_no_keyboard('restart_yes', 'restart_no')
 
     update.message.reply_text(
         "❓ Do you want to start a new form?",
@@ -1062,7 +1412,7 @@ def handle_invalid_message(update, context):
 
 def handle_restart_choice(update, context):
     query = update.callback_query
-    
+
     try:
         query.answer()
     except telegram.error.BadRequest as e:
@@ -1104,7 +1454,7 @@ def save_phone(update, context):
 def handle_calendar(update, context):
     context.chat_data['last_state'] = BIRTH_DATE
     query = update.callback_query
-    
+
     try:
         query.answer()
     except telegram.error.BadRequest as e:
@@ -1192,7 +1542,7 @@ def handle_lost_conversation(update, context):
         "I promise to keep all your answers safe this time! 🚀\n\n"
         "_P.S. Sorry for the interruption - even robots need occasional upgrades!_ ✨"
     )
-    
+
     try:
         # Se è una callback query, rispondi alla query per evitare il simbolo di caricamento
         if isinstance(update, telegram.Update) and update.callback_query:
@@ -1218,7 +1568,7 @@ def handle_lost_conversation(update, context):
             )
         except:
             pass
-    
+
     return ConversationHandler.END
 
 def handle_hike(update, context):
@@ -1241,7 +1591,7 @@ def handle_hike(update, context):
         hike_idx = int(query.data.split('_')[1].replace('hike', ''))
         hike = context.user_data['available_hikes'][hike_idx]
         available_spots = hike['max_participants'] - hike['current_participants']
-        
+
         if available_spots > 0:
             query.answer(
                 f"Click on the hike name below to select/deselect",
@@ -1262,7 +1612,7 @@ def handle_hike(update, context):
         # Verifica che ci siano ancora posti disponibili
         hike = available_hikes[hike_idx]
         available_spots = hike['max_participants'] - hike['current_participants']
-        
+
         if available_spots <= 0:
             query.answer("This hike is fully booked", show_alert=True)
             return HIKE_CHOICE
@@ -1312,7 +1662,7 @@ def handle_hike(update, context):
             reply_markup=reply_markup
         )
         return EQUIPMENT
-        
+
 
 ## PARTE 6 - Gestione delle domande finali e salvataggio
 def handle_equipment(update, context):
@@ -1328,13 +1678,7 @@ def handle_equipment(update, context):
 
     context.user_data['equipment'] = 'Yes' if query.data == 'yes_eq' else 'No'
 
-    keyboard = [
-        [
-            InlineKeyboardButton("Yes ✅", callback_data='yes_car'),
-            InlineKeyboardButton("No ❌", callback_data='no_car')
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = KeyboardBuilder.create_car_share_keyboard()
 
     context.bot.send_message(
         chat_id=query.message.chat_id,
@@ -1349,7 +1693,7 @@ def handle_equipment(update, context):
 def handle_car_share(update, context):
     context.chat_data['last_state'] = CAR_SHARE
     query = update.callback_query
-    
+
     try:
         query.answer()
     except telegram.error.BadRequest as e:
@@ -1365,7 +1709,7 @@ def handle_car_share(update, context):
         [InlineKeyboardButton("Outside Rome 🌍", callback_data='outside_rome')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     context.bot.send_message(
         chat_id=query.message.chat_id,
         text="📍 Where do you live?\n"
@@ -1378,13 +1722,13 @@ def handle_car_share(update, context):
 def handle_location_choice(update, context):
     query = update.callback_query
     query.answer()
-    
+
     if query.data == 'outside_rome':
         query.edit_message_text(
             "🌍 Please specify your location (e.g., Frascati, Tivoli, etc.):"
         )
         return CUSTOM_QUARTIERE
-    
+
     # Definizione dei municipi con i loro quartieri
     municipi_data = {
         'I': ['Centro Storico', 'Trastevere', 'Testaccio', 'Esquilino', 'Prati'],
@@ -1403,18 +1747,12 @@ def handle_location_choice(update, context):
         'XIV': ['Monte Mario', 'Primavalle', 'Ottavia'],
         'XV': ['La Storta', 'Cesano', 'Prima Porta']
     }
-    
+
     context.user_data['municipi_data'] = municipi_data
-    
+
     # Crea keyboard per i municipi
-    keyboard = []
-    for municipio in municipi_data.keys():
-        keyboard.append([InlineKeyboardButton(
-            f"Municipio {municipio}", 
-            callback_data=f'mun_{municipio}'
-        )])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = KeyboardBuilder.create_municipi_keyboard(municipi_data.keys())
+
     query.edit_message_text(
         "🏛 Select your municipio:",
         reply_markup=reply_markup
@@ -1423,29 +1761,29 @@ def handle_location_choice(update, context):
 
 def handle_quartiere_choice(update, context):
     query = update.callback_query
-    
+
     try:
         query.answer()
     except telegram.error.BadRequest as e:
         if "Query is too old" in str(e) or "Message is not modified" in str(e):
             return handle_lost_conversation(update, context)
         raise
-    
+
     municipio = query.data.replace('mun_', '')
     context.user_data['selected_municipio'] = municipio
     municipi_data = context.user_data['municipi_data']
-    
+
     quartieri = municipi_data[municipio]
     keyboard = []
-    
+
     # Crea bottoni per ogni quartiere
     for quartiere in quartieri:
         keyboard.append([InlineKeyboardButton(quartiere, callback_data=f'q_{quartiere}')])
-    
+
     # Aggiungi opzioni aggiuntive
     keyboard.append([InlineKeyboardButton("Other area in this municipio", callback_data='other_area')])
     keyboard.append([InlineKeyboardButton("🔙 Back to municipi", callback_data='back_municipi')])
-    
+
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.edit_message_text(
         f"🏘 Select your area in Municipio {municipio}:",
@@ -1455,31 +1793,31 @@ def handle_quartiere_choice(update, context):
 
 def handle_final_location(update, context):
     query = update.callback_query
-    
+
     try:
         query.answer()
     except telegram.error.BadRequest as e:
         if "Query is too old" in str(e) or "Message is not modified" in str(e):
             return handle_lost_conversation(update, context)
         raise
-    
+
     if query.data == 'back_municipi':
         return handle_location_choice(update, context)
-    
+
     if query.data == 'other_area':
         query.edit_message_text("📍 Please specify your area in this municipio:")
         return CUSTOM_QUARTIERE
-    
+
     quartiere = query.data.replace('q_', '')
     municipio = context.user_data['selected_municipio']
     location = f"Municipio {municipio} - {quartiere}"
     context.user_data['location'] = location
-    
+
     return handle_reminder_preferences(update, context)
 
 def handle_custom_location(update, context):
     context.chat_data['last_state'] = CUSTOM_QUARTIERE
-    
+
     if 'selected_municipio' in context.user_data:
         # Custom area in a municipio
         municipio = context.user_data['selected_municipio']
@@ -1487,9 +1825,9 @@ def handle_custom_location(update, context):
     else:
         # Location outside Rome
         location = f"Outside Rome - {update.message.text}"
-    
+
     context.user_data['location'] = location
-    
+
     # Crea e invia il pannello dei reminder direttamente
     keyboard = [
         [InlineKeyboardButton("7 days before", callback_data='reminder_7')],
@@ -1506,11 +1844,11 @@ def handle_custom_location(update, context):
         reply_markup=reply_markup
     )
     return REMINDER_CHOICE
-    
+
 
 def handle_reminder_preferences(update, context):
     query = update.callback_query
-    
+
     try:
         query.answer()
     except telegram.error.BadRequest as e:
@@ -1538,7 +1876,7 @@ def handle_reminder_preferences(update, context):
 def save_reminder_preference(update, context):
     context.chat_data['last_state'] = REMINDER_CHOICE
     query = update.callback_query
-    
+
     try:
         query.answer()
     except telegram.error.BadRequest as e:
@@ -1576,13 +1914,7 @@ def save_notes(update, context):
     context.chat_data['last_state'] = NOTES
     context.user_data['notes'] = update.message.text
 
-    keyboard = [
-        [
-            InlineKeyboardButton("Accept ✅", callback_data='accept'),
-            InlineKeyboardButton("Reject ❌", callback_data='reject')
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = KeyboardBuilder.create_final_notes_keyboard()
 
     update.message.reply_text(
         "⚠️ *IMPORTANT NOTES*\n"
@@ -1597,7 +1929,7 @@ def save_notes(update, context):
 
 def handle_final_choice(update, context):
     query = update.callback_query
-    
+
     try:
         query.answer()
     except telegram.error.BadRequest as e:
@@ -1694,20 +2026,23 @@ def cancel(update, context):
 
 import atexit
 
-def cleanup():
+def cleanup(updater):
     """Funzione di cleanup che viene chiamata all'uscita"""
     try:
-        updater.stop()
+        if updater:
+            updater.stop()
     except:
         pass
 
 atexit.register(cleanup)
 
+
+
 def main():
-    
+
     # Get port number from environment variable
-    port = int(os.environ.get('PORT', 10000))
-    
+    #port = int(os.environ.get('PORT', 10000)) #RENDER
+
     # token bot telegram
     TOKEN = os.environ.get('TELEGRAM_TOKEN')
     # api meteo
@@ -1716,35 +2051,38 @@ def main():
     if not TOKEN:
         raise ValueError("No telegram token provided")
 
-    updater = Updater(TOKEN, use_context=True)
+    request_kwargs = {
+        'read_timeout': 6,  # Tempo che il bot impiega a recepire la risposta. Basso=errori in caso di rete lenta, Alto=l'utente aspetta troppo
+        'connect_timeout': 7,  # Tempo permesso per stabilire la connessione iniziale con i server Telegram. Basso=errori se rete instabile, Alto=ritardo nell'avvio
+    }
+
+    updater = Updater(
+        TOKEN,
+        use_context=True,
+        request_kwargs=request_kwargs
+    )
+
     dp = updater.dispatcher
 
     # Setup sheets
-    sheet_responses, sheet_hikes = setup_google_sheets()
+    sheet_responses, sheet_hikes, sheet_privacy = setup_google_sheets()
     dp.bot_data['sheet_responses'] = sheet_responses
     dp.bot_data['sheet_hikes'] = sheet_hikes
+    dp.bot_data['sheet_privacy'] = sheet_privacy
 
     # Setup rate limiter
     rate_limiter = RateLimiter(max_requests=5, time_window=60)  # 5 richieste al minuto
     dp.bot_data['rate_limiter'] = rate_limiter
 
-    # Setup error handler
-    dp.add_error_handler(error_handler)
 
-    dp.add_handler(CommandHandler('restart', restart))
-
-    # Aggiungi job scheduler per i reminder
-    job_queue = updater.job_queue
-    job_queue.run_daily(
-        callback=check_and_send_reminders,
-        time=datetime_time(hour=9, minute=0, tzinfo=rome_tz)  # Invia reminder alle 9:00 ora di Roma
-    )
 
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler('menu', menu),
-            MessageHandler(Filters.text & ~Filters.command, handle_invalid_message),
-            CallbackQueryHandler(handle_restart_choice, pattern='^restart_')
+            CommandHandler('start', menu),
+            CommandHandler('restart', restart),
+            CallbackQueryHandler(handle_restart_choice, pattern='^restart_'),
+            CommandHandler('privacy', cmd_privacy)
         ],
         states={
             CHOOSING: [
@@ -1755,6 +2093,13 @@ def main():
                 CallbackQueryHandler(handle_cancel_request, pattern='^cancel_hike_\d+$'),
                 CallbackQueryHandler(handle_cancel_confirmation, pattern='^(confirm_cancel|abort_cancel)$'),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$')
+            ],
+            PRIVACY_CONSENT: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CommandHandler('privacy', cmd_privacy),
+                CallbackQueryHandler(handle_privacy_choices, pattern='^privacy_(start|modify|carsharing|photos|marketing|save)$'),
+                CallbackQueryHandler(handle_menu_choice, pattern='^back_to_menu$')
             ],
             REMINDER_CHOICE: [
                 CommandHandler('menu', menu),
@@ -1849,25 +2194,65 @@ def main():
         },
         fallbacks=[
             CommandHandler('cancel', cancel),
-            CommandHandler('restart', restart)
-        ]
+            CommandHandler('restart', restart),
+            MessageHandler(Filters.text & ~Filters.command, handle_invalid_message)
+        ],
+        allow_reentry=True
     )
 
+    # Aggiungi job scheduler per i reminder
+    job_queue = updater.job_queue
+    job_queue.run_daily(
+        callback=check_and_send_reminders,
+        time=datetime_time(hour=9, minute=0, tzinfo=rome_tz)  # Invia reminder alle 9:00 ora di Roma
+    )
+
+    # Registra gli handlers
     dp.add_handler(conv_handler)
+    dp.add_error_handler(error_handler)
+    dp.add_handler(CommandHandler('privacy', cmd_privacy))
+
+    # Registra la funzione di cleanup
+    atexit.register(cleanup, updater)
 
     # Avvia il bot
     # Start the webhook
-    updater.start_webhook(
-        listen="0.0.0.0",
-        port=port,
-        url_path=TOKEN,
-        webhook_url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/{TOKEN}"
-    )
-    #updater.start_polling(drop_pending_updates=True)  # Aggiungi drop_pending_updates=True
-    #print("🚀 Bot started! Press CTRL+C to stop.")
+    ################### RENDER
+    # updater.start_webhook(
+    #     listen="0.0.0.0",
+    #     port=port,
+    #     url_path=TOKEN,
+    #     webhook_url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/{TOKEN}"
+    # )
+    ##################
 
-    # Blocca l'esecuzione fino a quando il bot non viene fermato
-    updater.idle()
+    ######## COLAB
+    try:
+        updater.start_polling(
+            drop_pending_updates=True,
+            timeout=30,        # Timeout più lungo per il polling
+            poll_interval=1.0, # Intervallo più lungo tra i poll
+            allowed_updates=['message', 'callback_query']  # Specifica gli update che ci interessano
+        )
+        print("🚀 Bot started! Press CTRL+C to stop.")
+        updater.idle()
+    except Exception as e:
+        print(f"Error starting bot: {e}")
+        # Prova a riavviare il polling in caso di errore
+        try:
+            time.sleep(5)  # Attendi 5 secondi prima di riprovare
+            updater.start_polling(
+                drop_pending_updates=True,
+                timeout=15, # Tempo di attesa del bot di risposte da parte di Telegram. Basso=più richieste ai server e più reattivo, Alto=meno richieste ai server e più latenza nelle risposte
+                poll_interval=0.5, # Intervallo tra una richiesta e l'altra. Basso=bot più reattivo ma più carico sul server, Alto=bot meno reattivo ma meno carico sul server
+                allowed_updates=['message', 'callback_query']
+            )
+            print("🔄 Bot restarted after error!")
+            updater.idle()
+        except Exception as e:
+            print(f"Fatal error starting bot: {e}")
+            raise
+    ############
 
     #print("🛑 Bot stopped!")
 
