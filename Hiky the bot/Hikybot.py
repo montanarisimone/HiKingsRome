@@ -592,13 +592,6 @@ def menu(update, context):
 
     user_id = update.effective_user.id
 
-    # Verifica se l'utente ha già dato il consenso privacy
-    privacy_status = check_privacy_consent(context.bot_data['sheet_privacy'], user_id)
-
-    if not privacy_status:
-        # Se non ha mai dato il consenso, mostra prima la privacy policy
-        return cmd_privacy(update, context)
-
     # Check rate limiting
     if not context.bot_data['rate_limiter'].is_allowed(update.effective_user.id):
         if update.callback_query:
@@ -611,7 +604,7 @@ def menu(update, context):
                 "⚠️ You're making too many requests. Please wait a minute and try again."
             )
         return ConversationHandler.END
-
+    
     # check appartenenza al gruppo
     if not check_user_membership(update, context):
         if update.callback_query:
@@ -625,6 +618,12 @@ def menu(update, context):
                 "Request access to the group and try again!"
             )
         return ConversationHandler.END
+    
+    # Verifica se l'utente ha già dato il consenso privacy
+    privacy_status = check_privacy_consent(context.bot_data['sheet_privacy'], user_id)
+    if not privacy_status:
+        # Se non ha mai dato il consenso, mostra prima la privacy policy
+        return cmd_privacy(update, context)
 
     print("Clearing user_data")
     context.user_data.clear()
