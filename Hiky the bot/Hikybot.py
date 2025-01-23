@@ -587,6 +587,16 @@ def cmd_privacy(update, context):
     update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
     return PRIVACY_CONSENT
 
+def cmd_bug(update, context):
+    """Handle /bug command"""
+    message = (
+        "🐛 Found a bug? Looks like our robot friends need some maintenance!\n\n"
+        "Please send an email to *hikingsrome@gmail.com* describing what happened. "
+        "Screenshots are worth a thousand bug reports! 📸\n\n"
+        "_Don't worry, even the most advanced AI occasionally trips over its own algorithms!_ 🤖"
+    )
+    update.message.reply_text(message, parse_mode='Markdown')
+
 ## PARTE 2 - Funzioni menu principale
 def menu(update, context):
     print("\n🚀 MENU CHIAMATO")
@@ -2228,6 +2238,7 @@ def main():
     dp.add_handler(conv_handler)
     dp.add_error_handler(error_handler)
     dp.add_handler(CommandHandler('privacy', cmd_privacy))
+    dp.add_handler(CommandHandler('bug', cmd_bug))
 
     # Registra la funzione di cleanup
     atexit.register(cleanup, updater)
