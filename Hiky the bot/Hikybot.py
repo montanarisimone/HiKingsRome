@@ -1411,12 +1411,21 @@ def handle_invalid_message(update, context):
         )
         return ConversationHandler.END
 
-    reply_markup = KeyboardBuilder.create_yes_no_keyboard('restart_yes', 'restart_no')
-
-    update.message.reply_text(
-        "❓ Do you want to start a new form?",
-        reply_markup=reply_markup
-    )
+    # Se l'utente è nel mezzo di un form (controlla last_state)
+    if context.chat_data.get('last_state') in [NAME, EMAIL, PHONE, BIRTH_DATE, MEDICAL, 
+        HIKE_CHOICE, EQUIPMENT, CAR_SHARE, LOCATION_CHOICE, QUARTIERE_CHOICE, 
+        FINAL_LOCATION, CUSTOM_QUARTIERE, NOTES, REMINDER_CHOICE]:
+        
+        reply_markup = KeyboardBuilder.create_yes_no_keyboard('restart_yes', 'restart_no')
+        update.message.reply_text(
+            "❓ Do you want to start a new form?",
+            reply_markup=reply_markup
+        )
+    else:
+        # Se l'utente non sta compilando un form
+        update.message.reply_text(
+            "⚠️ If you need to access the menu, use the /menu command."
+        )
 
 def handle_restart_choice(update, context):
     query = update.callback_query
