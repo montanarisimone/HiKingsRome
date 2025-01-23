@@ -2102,8 +2102,6 @@ def main():
     rate_limiter = RateLimiter(max_requests=5, time_window=60)  # 5 richieste al minuto
     dp.bot_data['rate_limiter'] = rate_limiter
 
-    dp.add_handler(CommandHandler('bug', cmd_bug))
-
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler('menu', menu),
@@ -2257,7 +2255,6 @@ def main():
     dp.add_handler(conv_handler)
     dp.add_error_handler(error_handler)
     dp.add_handler(CommandHandler('privacy', cmd_privacy))
-    dp.add_handler(CommandHandler('bug', cmd_bug))
 
     # Registra la funzione di cleanup
     atexit.register(cleanup, updater)
