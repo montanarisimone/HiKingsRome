@@ -429,8 +429,12 @@ def check_and_send_reminders(context):
 
     for reg in registrations:
         hikes = reg['Choose the hike'].split('; ')
-        reminder_pref = reg['Reminder preference']
+        reminder_pref = reg.get('reminder_preference', '')
         telegram_id = reg['Telegram_ID']
+
+        # Gestione dei diversi formati di reminder
+        should_remind_7 = any(pref in reminder_pref.lower() for pref in ['7', 'both', 'and'])
+        should_remind_3 = any(pref in reminder_pref.lower() for pref in ['3', 'both', 'and'])
 
         for hike in hikes:
             if hike:
@@ -439,8 +443,8 @@ def check_and_send_reminders(context):
                 days_until_hike = (hike_date - today).days
 
                 # Controlla se è il momento di inviare un reminder
-                if ((days_until_hike == 7 and ('7' in reminder_pref or 'both' in reminder_pref)) or
-                    (days_until_hike == 3 and ('3' in reminder_pref or 'both' in reminder_pref))):
+                if ((days_until_hike == 7 and should_remind_7) or
+                    (days_until_hike == 3 and should_remind_3)):
 
                     # Ottieni previsioni meteo
                     coords = hikes_coords.get(name)
