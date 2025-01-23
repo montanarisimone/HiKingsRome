@@ -2117,6 +2117,7 @@ def main():
             CHOOSING: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
+                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_menu_choice, pattern='^(signup|myhikes|links|back_to_menu)$'),
                 CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)$'),
                 CallbackQueryHandler(handle_cancel_request, pattern='^cancel_hike_\d+$'),
