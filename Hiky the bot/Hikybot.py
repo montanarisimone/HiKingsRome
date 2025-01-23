@@ -596,6 +596,7 @@ def cmd_bug(update, context):
         "_Don't worry, even the most advanced AI occasionally trips over its own algorithms!_ 🤖"
     )
     update.message.reply_text(message, parse_mode='Markdown')
+    return CHOOSING
 
 ## PARTE 2 - Funzioni menu principale
 def menu(update, context):
@@ -2108,6 +2109,7 @@ def main():
             CommandHandler('menu', menu),
             CommandHandler('start', menu),
             CommandHandler('restart', restart),
+            CommandHandler('bug', cmd_bug),
             CallbackQueryHandler(handle_restart_choice, pattern='^restart_'),
             CommandHandler('privacy', cmd_privacy)
         ],
