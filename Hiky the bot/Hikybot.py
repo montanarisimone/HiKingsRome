@@ -589,6 +589,7 @@ def cmd_privacy(update, context):
 
 def cmd_bug(update, context):
     """Handle /bug command"""
+    print("\n🐛 BUG COMMAND CALLED")
     message = (
         "🐛 Found a bug? Looks like our robot friends need some maintenance!\n\n"
         "Please send an email to *hikingsrome@gmail.com* describing what happened. "
@@ -597,12 +598,14 @@ def cmd_bug(update, context):
     )
     reply_markup = KeyboardBuilder.create_back_to_menu_keyboard()
     
-    update.message.reply_text(
-        message, 
-        parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
-    return ConversationHandler.END
+    try:
+        update.message.reply_text(
+            message, 
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        print(f"Error in cmd_bug: {e}")
 
 ## PARTE 2 - Funzioni menu principale
 def menu(update, context):
@@ -2113,7 +2116,6 @@ def main():
             CommandHandler('menu', menu),
             CommandHandler('start', menu),
             CommandHandler('restart', restart),
-            CommandHandler('bug', cmd_bug),
             CallbackQueryHandler(handle_restart_choice, pattern='^restart_'),
             CommandHandler('privacy', cmd_privacy)
         ],
@@ -2121,7 +2123,6 @@ def main():
             CHOOSING: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_menu_choice, pattern='^(signup|myhikes|links|back_to_menu)$'),
                 CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)$'),
                 CallbackQueryHandler(handle_cancel_request, pattern='^cancel_hike_\d+$'),
@@ -2132,112 +2133,96 @@ def main():
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CommandHandler('privacy', cmd_privacy),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_privacy_choices, pattern='^privacy_(start|modify|carsharing|photos|marketing|save)$'),
                 CallbackQueryHandler(handle_menu_choice, pattern='^back_to_menu$')
             ],
             REMINDER_CHOICE: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(save_reminder_preference, pattern='^reminder_')
             ],
             NAME: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_name)
             ],
             EMAIL: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_email)
             ],
             PHONE: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_phone)
             ],
             BIRTH_DATE: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_calendar)
             ],
             MEDICAL: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_medical)
             ],
             HIKE_CHOICE: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_hike)
             ],
             EQUIPMENT: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_equipment)
             ],
             CAR_SHARE: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_car_share)
             ],
             LOCATION_CHOICE: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_location_choice)
             ],
             QUARTIERE_CHOICE: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_quartiere_choice)
             ],
             FINAL_LOCATION: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_final_location)
             ],
             CUSTOM_QUARTIERE: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, handle_custom_location)
             ],
             NOTES: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 MessageHandler(Filters.text & ~Filters.command, save_notes)
             ],
             IMPORTANT_NOTES: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('bug', cmd_bug),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
                 CallbackQueryHandler(handle_final_choice)
             ]
@@ -2258,6 +2243,7 @@ def main():
     )
 
     # Registra gli handlers
+    dp.add_handler(CommandHandler('bug', cmd_bug))
     dp.add_handler(conv_handler)
     dp.add_error_handler(error_handler)
     dp.add_handler(CommandHandler('privacy', cmd_privacy))
