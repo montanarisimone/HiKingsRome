@@ -590,13 +590,16 @@ def cmd_privacy(update, context):
 def cmd_bug(update, context):
     """Handle /bug command"""
     print("\n🐛 BUG COMMAND CALLED")
+
+    keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
     message = (
         "🐛 Found a bug? Looks like our robot friends need some maintenance!\n\n"
         "Please send an email to *hikingsrome@gmail.com* describing what happened. "
         "Screenshots are worth a thousand bug reports! 📸\n\n"
         "_Don't worry, even the most advanced AI occasionally trips over its own algorithms!_ 🤖"
     )
-    reply_markup = KeyboardBuilder.create_back_to_menu_keyboard()
     
     try:
         update.message.reply_text(
@@ -606,6 +609,11 @@ def cmd_bug(update, context):
         )
     except Exception as e:
         print(f"Error in cmd_bug: {e}")
+        # Fallback senza markup in caso di errore
+        update.message.reply_text(
+            message.replace('*', '').replace('_', ''),
+            reply_markup=reply_markup
+        )
 
 ## PARTE 2 - Funzioni menu principale
 def menu(update, context):
@@ -2245,6 +2253,7 @@ def main():
     # Registra gli handlers
     dp.add_handler(CommandHandler('bug', cmd_bug))
     dp.add_handler(conv_handler)
+    dp.add_handler(CallbackQueryHandler(menu, pattern='^back_to_menu$'))
     dp.add_error_handler(error_handler)
     dp.add_handler(CommandHandler('privacy', cmd_privacy))
 
