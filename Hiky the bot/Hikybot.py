@@ -595,8 +595,14 @@ def cmd_bug(update, context):
         "Screenshots are worth a thousand bug reports! 📸\n\n"
         "_Don't worry, even the most advanced AI occasionally trips over its own algorithms!_ 🤖"
     )
-    update.message.reply_text(message, parse_mode='Markdown')
-    return CHOOSING
+    reply_markup = KeyboardBuilder.create_back_to_menu_keyboard()
+    
+    update.message.reply_text(
+        message, 
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ConversationHandler.END
 
 ## PARTE 2 - Funzioni menu principale
 def menu(update, context):
