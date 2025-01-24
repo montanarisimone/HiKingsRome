@@ -589,25 +589,8 @@ def cmd_privacy(update, context):
 
 def cmd_bug(update, context):
     """Handle /bug command"""
-    # Check if user is in questionario
-    current_state = context.chat_data.get('last_state')
-    if current_state in [NAME, EMAIL, PHONE, BIRTH_DATE, MEDICAL, HIKE_CHOICE, EQUIPMENT,
-                        CAR_SHARE, LOCATION_CHOICE, QUARTIERE_CHOICE, FINAL_LOCATION,
-                        CUSTOM_QUARTIERE, NOTES, REMINDER_CHOICE]:
-        keyboard = [
-            [
-                InlineKeyboardButton("Continue form ✍️", callback_data='continue_form'),
-                InlineKeyboardButton("Cancel form ❌", callback_data='cancel_form_bug')
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        update.message.reply_text(
-            "⚠️ You are in the middle of filling out a form.\n"
-            "What would you like to do?",
-            reply_markup=reply_markup
-        )
-        return current_state
-        
+    print("\n🐛 BUG COMMAND CALLED")
+    
     message = (
         "🐛 Found a bug? Looks like our robot friends need some maintenance!\n\n"
         "Please send an email to *hikingsrome@gmail.com* describing what happened. "
@@ -618,7 +601,14 @@ def cmd_bug(update, context):
     keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    update.message.reply_text(message, parse_mode='Markdown', reply_markup=reply_markup)
+    try:
+        update.message.reply_text(message, parse_mode='Markdown', reply_markup=reply_markup)
+    except Exception as e:
+        print(f"Error in cmd_bug: {e}")
+        update.message.reply_text(
+            message.replace('*', '').replace('_', ''),
+            reply_markup=reply_markup
+        )
     return CHOOSING
 
 ## PARTE 2 - Funzioni menu principale
@@ -2131,7 +2121,8 @@ def main():
             CommandHandler('start', menu),
             CommandHandler('restart', restart),
             CallbackQueryHandler(handle_restart_choice, pattern='^restart_'),
-            CommandHandler('privacy', cmd_privacy)
+            CommandHandler('privacy', cmd_privacy),
+            CommandHandler('bug', cmd_bug)
         ],
         states={
             CHOOSING: [
