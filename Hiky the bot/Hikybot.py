@@ -2247,7 +2247,6 @@ def main():
     )
 
     # Registra gli handlers
-    dp.add_handler(CommandHandler('bug', cmd_bug))
     dp.add_handler(conv_handler)
     dp.add_handler(CallbackQueryHandler(menu, pattern='^back_to_menu$'))
     dp.add_error_handler(error_handler)
