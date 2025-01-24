@@ -2066,15 +2066,13 @@ def cancel(update, context):
 
 import atexit
 
-def cleanup(updater):
+def cleanup(updater=None):  # Aggiungi il default None
     """Funzione di cleanup che viene chiamata all'uscita"""
     try:
         if updater:
             updater.stop()
     except:
         pass
-
-atexit.register(cleanup)
 
 
 
@@ -2102,6 +2100,7 @@ def main():
         request_kwargs=request_kwargs
     )
 
+    atexit.register(lambda: cleanup(updater))
     dp = updater.dispatcher
 
     # Setup sheets
