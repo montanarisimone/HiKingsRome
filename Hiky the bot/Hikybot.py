@@ -80,7 +80,9 @@ def setup_google_sheets():
     
     credentials_path = '/home/hikingsrome/google_credentials.json'
     
-    credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_path, scope)
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_path, scope) # VM
+
+    #credentials = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope) # COLAB
     
     client = gspread.authorize(credentials)
 
@@ -2123,9 +2125,6 @@ def cleanup(updater=None):  # Aggiungi il default None
 
 def main():
 
-    # Get port number from environment variable
-    #port = int(os.environ.get('PORT', 10000)) #RENDER
-
     # token bot telegram
     TOKEN = os.environ.get('TELEGRAM_TOKEN')
     # api meteo
@@ -2301,17 +2300,6 @@ def main():
     atexit.register(cleanup, updater)
 
     # Avvia il bot
-    # Start the webhook
-    ################### RENDER
-    # updater.start_webhook(
-    #     listen="0.0.0.0",
-    #     port=port,
-    #     url_path=TOKEN,
-    #     webhook_url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/{TOKEN}"
-    # )
-    ##################
-
-    ######## COLAB
     try:
         updater.start_polling(
             drop_pending_updates=True,
