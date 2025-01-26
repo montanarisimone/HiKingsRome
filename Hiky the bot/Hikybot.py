@@ -48,7 +48,20 @@ def check_user_membership(update, context):
         #print(f"Membership info: {member}")
         return member.status in ['member', 'administrator', 'creator']
     except Exception as e:
-        print(f"Error checking membership: {e}")
+        print(f"Error checking membership for user {user_id}: {e}")
+
+        keyboard = [[InlineKeyboardButton("Join the Group", url=GROUP_INVITE_LINK)]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        message_text = (
+            "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
+            "Use the button below to join the group and try again using /start."
+        )
+
+        if update.callback_query:
+            update.callback_query.edit_message_text(text=message_text, reply_markup=reply_markup)
+        else:
+            update.message.reply_text(message_text, reply_markup=reply_markup)
         #print(f"User ID: {user_id}, Group ID: {PRIVATE_GROUP_ID}")
         return False
 
@@ -549,6 +562,15 @@ def error_handler(update, context):
 def cmd_privacy(update, context):
     """Gestisce il comando /privacy"""
     user_id = update.effective_user.id
+
+    # Check username
+    check_and_update_username(
+        context.bot_data['sheet_responses'],
+        context.bot_data['sheet_privacy'],
+        user_id,
+        update.effective_user.username
+    )
+    
     privacy_record = check_privacy_consent(context.bot_data['sheet_privacy'], user_id)
 
     if privacy_record:
@@ -613,6 +635,27 @@ def cmd_bug(update, context):
             reply_markup=reply_markup
         )
 
+def check_and_update_username(sheet_responses, sheet_privacy, user_id, current_username):
+    """Verifica e aggiorna lo username se necessario"""
+    current_username = current_username or 'Not set'
+    needs_update = False
+    
+    # Check privacy sheet
+    privacy_records = sheet_privacy.get_all_records()
+    for idx, record in enumerate(privacy_records, start=2):
+        if str(record['Telegram_ID']) == str(user_id) and record['Username'] != current_username:
+            sheet_privacy.update_cell(idx, 3, current_username)
+            needs_update = True
+
+    # Check responses sheet
+    responses = sheet_responses.get_all_records()
+    for idx, record in enumerate(responses, start=2):
+        if str(record['Telegram_ID']) == str(user_id) and record['Username'] != current_username:
+            sheet_responses.update_cell(idx, 3, current_username)
+            needs_update = True
+            
+    return needs_update
+
 ## PARTE 2 - Funzioni menu principale
 def menu(update, context):
     print("\n🚀 MENU CHIAMATO")
@@ -621,6 +664,14 @@ def menu(update, context):
     print(f"Current state: {context.chat_data.get('last_state')}")
 
     user_id = update.effective_user.id
+
+    # Check username
+    check_and_update_username(
+        context.bot_data['sheet_responses'],
+        context.bot_data['sheet_privacy'],
+        user_id,
+        update.effective_user.username
+    )
 
     # Check rate limiting
     if not context.bot_data['rate_limiter'].is_allowed(update.effective_user.id):
@@ -637,16 +688,6 @@ def menu(update, context):
     
     # check appartenenza al gruppo
     if not check_user_membership(update, context):
-        if update.callback_query:
-            update.callback_query.edit_message_text(
-                "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
-                "Request access to the group and try again!"
-            )
-        else:
-            update.message.reply_text(
-                "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
-                "Request access to the group and try again!"
-            )
         return ConversationHandler.END
     
     # Verifica se l'utente ha già dato il consenso privacy
@@ -662,18 +703,13 @@ def menu(update, context):
     reply_markup = KeyboardBuilder.create_menu_keyboard()
 
     print("Sending menu message")
+    username = update.effective_user.username or "there"
+    message = f"Hi {username}, I'm Hiky and I'll help you interact with @hikingsrome.\nHow can I assist you?"
+
     if update.callback_query:
-        update.callback_query.edit_message_text(
-            "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
-            "How can I assist you?",
-            reply_markup=reply_markup
-        )
+        update.callback_query.edit_message_text(message, reply_markup=reply_markup)
     else:
-        update.message.reply_text(
-            "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
-            "How can I assist you?",
-            reply_markup=reply_markup
-        )
+        update.message.reply_text(message, reply_markup=reply_markup)
 
     return CHOOSING
 
@@ -1181,11 +1217,6 @@ def handle_menu_choice(update, context):
         raise
 
     if not check_user_membership(update, context):
-        print(f"User {query.from_user.id} not in group")
-        query.edit_message_text(
-            "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
-            "Request access to the group and try again!"
-        )
         return ConversationHandler.END
 
     print(f"Processing menu choice: {query.data}")
@@ -1432,10 +1463,6 @@ def handle_cancel_confirmation(update, context):
 ## PARTE 4 - Gestione delle domande del questionario
 def handle_invalid_message(update, context):
     if not check_user_membership(update, context):
-        update.message.reply_text(
-            "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
-            "Request access to the group and try again!"
-        )
         return ConversationHandler.END
 
     # Stati in cui l'utente non sta compilando il form
