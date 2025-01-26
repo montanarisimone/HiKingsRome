@@ -1,5 +1,4 @@
 ## PARTE 1 - IMPORT E SETUP INIZIALE
-# test
 import telegram
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler, CallbackQueryHandler
