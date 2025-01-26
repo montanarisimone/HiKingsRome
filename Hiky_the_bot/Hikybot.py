@@ -16,25 +16,6 @@ from collections import defaultdict
 from utils.keyboards import KeyboardBuilder
 import json
 
-env_path = '/home/hikingsrome/.env'
-
-# Controlla se il file esiste
-if os.path.exists(env_path):
-    load_dotenv(env_path)
-    print("✅ .env file loaded successfully")
-else:
-    raise FileNotFoundError(f"❌ Missing environment file: {env_path}")
-
-# Controlla se la variabile è stata caricata
-api_key = os.getenv('OPENWEATHER_API_KEY')
-
-if api_key is None:
-    raise ValueError("❌ OPENWEATHER_API_KEY is not set or is empty. Check your .env file.")
-
-print(f"DEBUG - OPENWEATHER_API_KEY: {api_key}")
-
-
-
 class RateLimiter:
     def __init__(self, max_requests=5, time_window=60):  # 5 richieste per minuto
         self.requests = defaultdict(list)
