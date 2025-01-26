@@ -38,31 +38,16 @@ class RateLimiter:
 
 def check_user_membership(update, context):
     """Verifica se l'utente è membro del gruppo privato"""
-    PRIVATE_GROUP_ID = os.environ.get('TELEGRAM_GROUP_ID') # ID come stringa
+    PRIVATE_GROUP_ID = os.environ.get('TELEGRAM_GROUP_ID')
     if not PRIVATE_GROUP_ID:
         raise ValueError("No telegram group ID provided")
 
     user_id = update.effective_user.id
     try:
         member = context.bot.get_chat_member(PRIVATE_GROUP_ID, user_id)
-        #print(f"Membership info: {member}")
         return member.status in ['member', 'administrator', 'creator']
     except Exception as e:
-        print(f"Error checking membership for user {user_id}: {e}")
-
-        keyboard = [[InlineKeyboardButton("Join the Group", url=GROUP_INVITE_LINK)]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        message_text = (
-            "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
-            "Use the button below to join the group and try again using /start."
-        )
-
-        if update.callback_query:
-            update.callback_query.edit_message_text(text=message_text, reply_markup=reply_markup)
-        else:
-            update.message.reply_text(message_text, reply_markup=reply_markup)
-        #print(f"User ID: {user_id}, Group ID: {PRIVATE_GROUP_ID}")
+        print(f"Error checking membership: {e}")
         return False
 
 # Stati della conversazione
@@ -566,6 +551,9 @@ def cmd_privacy(update, context):
     user_id = update.effective_user.id
     username = update.effective_user.username or 'Not set'
 
+    if not check_user_membership(update, context):
+        return handle_non_member(update, context)
+
     # Check username
     check_and_update_username(
         context.bot_data['sheet_responses'],
@@ -617,6 +605,9 @@ def cmd_privacy(update, context):
 
 def cmd_bug(update, context):
     """Handle /bug command"""
+    if not check_user_membership(update, context):
+        return handle_non_member(update, context)
+
     print("\n🐛 BUG COMMAND CALLED")
     
     message = (
@@ -670,6 +661,20 @@ def check_and_update_username(sheet_responses, sheet_privacy, user_id, current_u
 
     return needs_update
 
+def handle_non_member(update, context):
+    GROUP_INVITE_LINK = "https://t.me/+dku6thBDTGM0MWZk"
+    keyboard = [[InlineKeyboardButton("Join the Group", url=GROUP_INVITE_LINK)]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    message_text = (
+        "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
+        "Use the button below to join the group and try again using /start."
+    )
+    if update.callback_query:
+        update.callback_query.edit_message_text(text=message_text, reply_markup=reply_markup)
+    else:
+        update.message.reply_text(text=message_text, reply_markup=reply_markup)
+    return ConversationHandler.END
+
 ## PARTE 2 - Funzioni menu principale
 def menu(update, context):
     print("\n🚀 MENU CHIAMATO")
@@ -678,6 +683,11 @@ def menu(update, context):
     print(f"Current state: {context.chat_data.get('last_state')}")
 
     user_id = update.effective_user.id
+
+    # check appartenenza al gruppo
+    GROUP_INVITE_LINK = "https://t.me/+dku6thBDTGM0MWZk"
+    if not check_user_membership(update, context):
+        return handle_non_member(update, context)
 
     # Check username
     check_and_update_username(
@@ -700,9 +710,7 @@ def menu(update, context):
             )
         return ConversationHandler.END
     
-    # check appartenenza al gruppo
-    if not check_user_membership(update, context):
-        return ConversationHandler.END
+    
     
     # Verifica se l'utente ha già dato il consenso privacy
     privacy_status = check_privacy_consent(context.bot_data['sheet_privacy'], user_id)
@@ -760,6 +768,9 @@ def restart(update, context):
     print(f"User ID: {user_id}")
     current_state = context.chat_data.get('last_state')
     print(f"Current state: {current_state}")
+
+    if not check_user_membership(update, context):
+        return handle_non_member(update, context)
 
     # Se l'utente stava compilando il form, chiedi conferma
     if current_state in [NAME, EMAIL, PHONE, BIRTH_DATE, MEDICAL, HIKE_CHOICE, EQUIPMENT,
