@@ -17,6 +17,7 @@ from utils.keyboards import KeyboardBuilder
 import json
 
 load_dotenv('/home/hikingsrome/.env')
+print("OPENWEATHER_API_KEY:", os.getenv('OPENWEATHER_API_KEY'))
 
 class RateLimiter:
     def __init__(self, max_requests=5, time_window=60):  # 5 richieste per minuto
