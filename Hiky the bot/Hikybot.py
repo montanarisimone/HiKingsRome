@@ -718,7 +718,7 @@ def menu(update, context):
 
     print("Sending menu message")
     username = update.effective_user.username or "there"
-    message = f"Hi {username}, I'm Hiky and I'll help you interact with @hikingsrome.\nHow can I assist you?"
+    message = f"Hi {username} 👋 \nI'm Hiky, your digital sherpa for @hikingsrome.\nI can’t climb mountains, but I sure can answer your messages. \nSo, how can I help you?"
 
     if update.callback_query:
         update.callback_query.edit_message_text(message, reply_markup=reply_markup)
@@ -780,6 +780,9 @@ def restart(update, context):
     context.user_data.clear()
     context.chat_data.clear()
 
+    username = update.effective_user.username or "there"
+    welcome_message = f"Hi {username} 👋 \nI'm Hiky, your digital sherpa for @hikingsrome.\nI can’t climb mountains, but I sure can answer your messages. \nSo, how can I help you?"
+
     try:
         # Prima elimina il messaggio precedente se possibile
         try:
@@ -797,8 +800,7 @@ def restart(update, context):
         reply_markup = KeyboardBuilder.create_menu_keyboard()
 
         update.message.reply_text(
-            "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
-            "How can I assist you?",
+            welcome_message,
             reply_markup=reply_markup
         )
     except Exception as e:
@@ -806,8 +808,7 @@ def restart(update, context):
         # Fallback in caso di errore
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
-                 "How can I assist you?",
+            text=welcome_message,
             reply_markup=reply_markup
         )
 
@@ -827,6 +828,9 @@ def direct_restart(update, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    username = update.effective_user.username or "there"
+    welcome_message = f"Hi {username} 👋 \nI'm Hiky, your digital sherpa for @hikingsrome.\nI can’t climb mountains, but I sure can answer your messages. \nSo, how can I help you?"
+
     try:
         if isinstance(update, CallbackQuery):
             # Prima prova a eliminare il messaggio precedente
@@ -836,14 +840,12 @@ def direct_restart(update, context):
                 pass
             # Invia un nuovo messaggio invece di modificare quello esistente
             update.message.reply_text(
-                "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
-                "How can I assist you?",
+                welcome_message,
                 reply_markup=reply_markup
             )
         else:
             update.message.reply_text(
-                "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
-                "How can I assist you?",
+                welcome_message,
                 reply_markup=reply_markup
             )
     except Exception as e:
@@ -853,15 +855,13 @@ def direct_restart(update, context):
             if isinstance(update, CallbackQuery):
                 context.bot.send_message(
                     chat_id=update.message.chat_id,
-                    text="Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
-                         "How can I assist you?",
+                    text=welcome_message,
                     reply_markup=reply_markup
                 )
             else:
                 context.bot.send_message(
                     chat_id=update.message.chat_id,
-                    text="Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
-                         "How can I assist you?",
+                    text=welcome_message,
                     reply_markup=reply_markup
                 )
         except:
@@ -1272,8 +1272,7 @@ def handle_menu_choice(update, context):
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         query.edit_message_text(
-            "Hi, I'm Hiky and I'll help you interact with @hikingsrome.\n"
-            "How can I assist you?",
+            welcome_message,
             reply_markup=reply_markup
         )
         return CHOOSING
