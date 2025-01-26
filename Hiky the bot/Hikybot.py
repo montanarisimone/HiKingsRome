@@ -562,13 +562,14 @@ def error_handler(update, context):
 def cmd_privacy(update, context):
     """Gestisce il comando /privacy"""
     user_id = update.effective_user.id
+    username = update.effective_user.username or 'Not set'
 
     # Check username
     check_and_update_username(
         context.bot_data['sheet_responses'],
         context.bot_data['sheet_privacy'],
         user_id,
-        update.effective_user.username
+        username
     )
     
     privacy_record = check_privacy_consent(context.bot_data['sheet_privacy'], user_id)
