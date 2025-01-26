@@ -718,12 +718,12 @@ def menu(update, context):
 
     print("Sending menu message")
     username = update.effective_user.username or "there"
-    message = f"Hi {username} 👋 \nI'm Hiky, your digital sherpa for @hikingsrome.\nI can’t climb mountains, but I sure can answer your messages. \nSo, how can I help you?"
+    welcome_message = f"Hi {username} 👋 \nI'm Hiky, your digital sherpa for @hikingsrome.\nI can’t climb mountains, but I sure can answer your messages. \nSo, how can I help you?"
 
     if update.callback_query:
-        update.callback_query.edit_message_text(message, reply_markup=reply_markup)
+        update.callback_query.edit_message_text(welcome_message, reply_markup=reply_markup)
     else:
-        update.message.reply_text(message, reply_markup=reply_markup)
+        update.message.reply_text(welcome_message, reply_markup=reply_markup)
 
     return CHOOSING
 
@@ -1221,6 +1221,9 @@ def handle_menu_choice(update, context):
     print("handle_menu_choice() called")
     query = update.callback_query
     print(f"handle_menu_choice chiamato con data: {query.data}")
+
+    username = update.effective_user.username or "there"
+    welcome_message = f"Hi {username} 👋 \nI'm Hiky, your digital sherpa for @hikingsrome.\nI can’t climb mountains, but I sure can answer your messages. \nSo, how can I help you?"
 
     try:
         query.answer()
