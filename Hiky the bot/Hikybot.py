@@ -640,20 +640,31 @@ def check_and_update_username(sheet_responses, sheet_privacy, user_id, current_u
     current_username = current_username or 'Not set'
     needs_update = False
     
-    # Check privacy sheet
+    # Controllo foglio Privacy
     privacy_records = sheet_privacy.get_all_records()
-    for idx, record in enumerate(privacy_records, start=2):
-        if str(record['Telegram_ID']) == str(user_id) and record['Username'] != current_username:
-            sheet_privacy.update_cell(idx, 3, current_username)
-            needs_update = True
+    for idx, record in enumerate(privacy_records, start=2):  # Indice parte da 2 per saltare l'header
+        if str(record['Telegram_ID']) == str(user_id):
+            saved_username = record.get('Username', 'Not set')
+            if saved_username != current_username:
+                print(f"Updating username in Privacy sheet: {saved_username} -> {current_username}")
+                sheet_privacy.update_cell(idx, 3, current_username)
+                needs_update = True
+            break  # Esci dal ciclo una volta trovato l'utente
 
-    # Check responses sheet
-    responses = sheet_responses.get_all_records()
-    for idx, record in enumerate(responses, start=2):
-        if str(record['Telegram_ID']) == str(user_id) and record['Username'] != current_username:
-            sheet_responses.update_cell(idx, 3, current_username)
-            needs_update = True
-            
+    # Controllo foglio Registrazioni
+    responses_records = sheet_responses.get_all_records()
+    for idx, record in enumerate(responses_records, start=2):
+        if str(record['Telegram_ID']) == str(user_id):
+            saved_username = record.get('Username', 'Not set')
+            if saved_username != current_username:
+                print(f"Updating username in Registrations sheet: {saved_username} -> {current_username}")
+                sheet_responses.update_cell(idx, 3, current_username)
+                needs_update = True
+            break  # Esci dal ciclo una volta trovato l'utente
+
+    if not needs_update:
+        print(f"No username update needed for user {user_id}")
+
     return needs_update
 
 ## PARTE 2 - Funzioni menu principale
