@@ -10,11 +10,13 @@ import time  # Modulo time per sleep()
 from calendar import monthcalendar, month_name
 import pytz
 import requests
+from dotenv import load_dotenv
 import os
 from collections import defaultdict
 from utils.keyboards import KeyboardBuilder
 import json
 
+load_dotenv('/home/hikingsrome/.env')
 
 class RateLimiter:
     def __init__(self, max_requests=5, time_window=60):  # 5 richieste per minuto
