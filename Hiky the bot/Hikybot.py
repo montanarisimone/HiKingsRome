@@ -80,6 +80,7 @@ def setup_google_sheets():
     privacy_fields = [
         'Timestamp',
         'Telegram_ID',
+        'Username',
         'basic_consent',         # Obbligatorio
         'car_sharing_consent',   # Opzionale
         'photo_consent',        # Opzionale
@@ -124,7 +125,8 @@ def check_privacy_consent(sheet_privacy, user_id):
                     'car_sharing_consent': record.get('car_sharing_consent', 'FALSE') == 'TRUE',
                     'photo_consent': record.get('photo_consent', 'FALSE') == 'TRUE',
                     'marketing_consent': record.get('marketing_consent', 'FALSE') == 'TRUE',
-                    'Telegram_ID': record['Telegram_ID']
+                    'Telegram_ID': record['Telegram_ID'],
+                    'Username': record.get('Username', 'Not set')
                 }
         return None
     except Exception as e:
@@ -140,6 +142,7 @@ def get_available_hikes(sheet_hikes, sheet_responses, user_id=None):
     registrations = sheet_responses.get_all_records(expected_headers=[
         'Timestamp_risposte',
         'Telegram_ID',
+        'Username',
         'Name and surname',
         'Email',
         'Phone number',
@@ -1114,6 +1117,7 @@ def handle_privacy_choices(update, context):
             row_data = [
                 timestamp,                            # Timestamp
                 user_id,                             # Telegram_ID
+                query.from_user.username or 'Not set',
                 'TRUE',                              # basic_consent (sempre True)
                 'TRUE' if choices.get('car_sharing_consent', False) else 'FALSE',
                 'TRUE' if choices.get('photo_consent', False) else 'FALSE',
@@ -2004,6 +2008,7 @@ def handle_final_choice(update, context):
             data = context.user_data
             timestamp = datetime.now(rome_tz).strftime("%Y-%m-%d %H:%M:%S")
             telegram_id = str(query.from_user.id)
+            username = query.from_user.username or 'Not set'
 
             # Format selected hikes for saving
             hikes_text = '; '.join([
@@ -2017,6 +2022,7 @@ def handle_final_choice(update, context):
                     sheet_responses.append_row([
                         timestamp,
                         telegram_id,
+                        username,
                         data.get('name', ''),
                         data.get('email', ''),
                         data.get('phone', ''),
