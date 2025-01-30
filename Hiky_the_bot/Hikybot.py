@@ -65,9 +65,9 @@ def setup_google_sheets():
     
     credentials_path = '/home/hikingsrome/google_credentials.json'
     
-    credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_path, scope) # VM
+    #credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_path, scope) # VM
 
-    #credentials = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope) # COLAB
+    credentials = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope) # COLAB
     
     client = gspread.authorize(credentials)
 
@@ -339,55 +339,70 @@ def create_calendar(year, month):
 def get_weather_forecast(lat, lon, date_str, api_key):
     """
     Ottiene le previsioni meteo per una data specifica
-    Usa coordinate invece del nome della località per maggiore precisione
     """
+    print(f"\nDEBUG Weather Forecast:")
+    print(f"Coordinates: lat={lat}, lon={lon}")
+    print(f"Date: {date_str}")
+    print(f"API Key: {api_key}")
+    
     try:
-        # Converti la data stringa in oggetto datetime
         target_date = datetime.strptime(date_str, '%d/%m/%Y').date()
         today = datetime.now().date()
         days_diff = (target_date - today).days
+        print(f"Days difference: {days_diff}")
 
-        if days_diff <= 5:  # Usiamo forecast giornaliero per previsioni fino a 5 giorni
-            url = f"https://api.openweathermap.org/data/2.5/forecast/daily"
-            params = {
-                'lat': lat,
-                'lon': lon,
-                'appid': api_key,
-                'units': 'metric',
-                'cnt': days_diff + 1
-            }
-            response = requests.get(url, params=params)
-            data = response.json()
-            forecast = data['list'][-1]  # Prendiamo l'ultimo giorno (quello target)
-
+        # Per il piano gratuito, usiamo l'endpoint 5 day / 3 hour forecast
+        url = "https://api.openweathermap.org/data/2.5/forecast"
+        params = {
+            'lat': lat,
+            'lon': lon,
+            'appid': api_key,
+            'units': 'metric'
+        }
+        
+        response = requests.get(url, params=params)
+        if response.status_code != 200:
+            print(f"❌ Weather API error: {response.status_code} - {response.text}")
+            return None
+            
+        data = response.json()
+        
+        # Con il piano gratuito possiamo vedere solo fino a 5 giorni
+        if days_diff > 5:
+            print(f"⚠️ Cannot get forecast for {days_diff} days in advance with free plan")
             return {
-                'temp_min': round(forecast['temp']['min']),
-                'temp_max': round(forecast['temp']['max']),
-                'description': forecast['weather'][0]['description'],
-                'probability_rain': round(forecast.get('pop', 0) * 100),  # Probabilità di pioggia in percentuale
-                'accuracy': 'high'
+                'temp_min': None,
+                'temp_max': None,
+                'description': 'Forecast not available yet',
+                'probability_rain': None,
+                'accuracy': 'unavailable'
             }
-
-        else:  # Per previsioni oltre 5 giorni usiamo il forecast climatico
-            url = "https://api.openweathermap.org/data/2.5/climate/forecast/daily"
-            params = {
-                'lat': lat,
-                'lon': lon,
-                'appid': api_key,
-                'units': 'metric'
-            }
-            response = requests.get(url, params=params)
-            data = response.json()
-
-            return {
-                'temp_min': round(data['temperature']['min']),
-                'temp_max': round(data['temperature']['max']),
-                'probability_rain': round(data.get('probability_of_precipitation', 0) * 100),
-                'accuracy': 'low'  # Indichiamo che è una previsione a lungo termine
-            }
+        
+        # Trova le previsioni per il giorno richiesto
+        target_forecasts = []
+        for item in data['list']:
+            forecast_date = datetime.fromtimestamp(item['dt']).date()
+            if forecast_date == target_date:
+                target_forecasts.append(item)
+        
+        if not target_forecasts:
+            return None
+            
+        # Calcola min e max per quel giorno
+        temps = [f['main']['temp'] for f in target_forecasts]
+        rain_probs = [f.get('pop', 0) for f in target_forecasts]
+        descriptions = [f['weather'][0]['description'] for f in target_forecasts]
+        
+        return {
+            'temp_min': round(min(temps)),
+            'temp_max': round(max(temps)),
+            'description': max(set(descriptions), key=descriptions.count),  # descrizione più frequente
+            'probability_rain': round(max(rain_probs) * 100),  # probabilità massima di pioggia
+            'accuracy': 'high' if days_diff <= 3 else 'medium'
+        }
 
     except Exception as e:
-        print(f"Error getting weather forecast: {e}")
+        print(f"❌ Error getting weather forecast: {e}")
         return None
 
 def format_weather_message(weather, days_until_hike):
@@ -397,87 +412,89 @@ def format_weather_message(weather, days_until_hike):
     if not weather:
         return "⚠️ _Weather forecast not available_"
 
-    if weather['accuracy'] == 'high':
-        return (
-            f"🌡 *Weather Forecast*:\n"
-            f"Temperature: {weather['temp_min']}°C - {weather['temp_max']}°C\n"
-            f"Conditions: {weather['description']}\n"
-            f"Chance of rain: {weather['probability_rain']}%"
-        )
-    else:
-        return (
-            f"🌡 *Weather Trend* (preliminary forecast):\n"
-            f"Expected temperature: {weather['temp_min']}°C - {weather['temp_max']}°C\n"
-            f"Chance of rain: {weather['probability_rain']}%\n"
-            f"_A more accurate forecast will be provided 3 days before the hike_"
-        )
+    if weather['accuracy'] == 'unavailable':
+        return ("🌡 *Weather Forecast*:\n"
+                "_Forecast not available yet. Check again 5 days before the hike_")
+
+    return (
+        f"🌡 *Weather Forecast*:\n"
+        f"Temperature: {weather['temp_min']}°C - {weather['temp_max']}°C\n"
+        f"Conditions: {weather['description']}\n"
+        f"Chance of rain: {weather['probability_rain']}%\n\n"
+        f"_{'High' if weather['accuracy'] == 'high' else 'Medium'} accuracy forecast_"
+    )
 
 def check_and_send_reminders(context):
-    """
-    Funzione da eseguire periodicamente per controllare e inviare i reminder
-    Args:
-        context: JobContext passato da job_queue
-    """
-    sheet_responses = context.bot.dispatcher.bot_data['sheet_responses']
-    sheet_hikes = context.bot.dispatcher.bot_data['sheet_hikes']
-    registrations = sheet_responses.get_all_records()
-    hikes_data = sheet_hikes.get_all_records()
-    today = datetime.now(rome_tz).date()
+    try:
+        sheet_responses = context.bot_data['sheet_responses']
+        sheet_hikes = context.bot_data['sheet_hikes']
+        weather_api = context.bot_data['weather_api']
+        registrations = sheet_responses.get_all_records()
+        hikes_data = sheet_hikes.get_all_records()
+        today = datetime.now(rome_tz).date()
+        
 
-    # Mappa degli hike con le loro coordinate
-    hikes_coords = {
-        hike['hike']: {'lat': hike['latitude'], 'lon': hike['longitude']}
-        for hike in hikes_data
-    }
+        # Crea mappa delle coordinate degli hike
+        hikes_coords = {
+            hike['hike']: {
+                'lat': hike['latitude'], 
+                'lon': hike['longitude']
+            }
+            for hike in hikes_data
+        }
 
-    for reg in registrations:
-        hikes = reg['Choose the hike'].split('; ')
-        reminder_pref = reg.get('reminder_preference', '')
-        telegram_id = reg['Telegram_ID']
+        for reg in registrations:
+            try:
+                hikes = reg['Choose the hike'].split('; ')
+                reminder_pref = reg.get('reminder_preference', '')
+                telegram_id = reg['Telegram_ID']
+                
+                should_remind_5 = any(pref in reminder_pref.lower() for pref in ['5', 'both', 'and', '5 days'])
+                should_remind_2 = any(pref in reminder_pref.lower() for pref in ['2', 'both', 'and', '2 days'])
+                
+                for hike in hikes:
+                    if hike:
+                        date_str, name = hike.split(' - ', 1)
+                        hike_date = datetime.strptime(date_str, '%d/%m/%Y').date()
+                        days_until_hike = (hike_date - today).days
+                        
+                        if ((days_until_hike == 5 and should_remind_5) or
+                            (days_until_hike == 2 and should_remind_2)):
+                            
+                            # Ottieni previsioni meteo
+                            weather = None
+                            coords = hikes_coords.get(name)
+                            if coords:
+                                weather = get_weather_forecast(
+                                    coords['lat'],
+                                    coords['lon'],
+                                    date_str,
+                                    weather_api
+                                )
 
-        # Gestione dei diversi formati di reminder
-        should_remind_7 = any(pref in reminder_pref.lower() for pref in ['7', 'both', 'and'])
-        should_remind_3 = any(pref in reminder_pref.lower() for pref in ['3', 'both', 'and'])
+                            weather_msg = format_weather_message(weather, days_until_hike) if weather else ""
 
-        for hike in hikes:
-            if hike:
-                date_str, name = hike.split(' - ', 1)
-                hike_date = datetime.strptime(date_str, '%d/%m/%Y').date()
-                days_until_hike = (hike_date - today).days
+                            message = (
+                                f"⏰ *Reminder*: You have an upcoming hike!\n\n"
+                                f"🗓 *Date:* {date_str}\n"
+                                f"🏃 *Hike:* {name}\n\n"
+                                f"{weather_msg}\n\n"
+                                f"_Remember to check the required equipment and be prepared!_"
+                            )
 
-                # Controlla se è il momento di inviare un reminder
-                if ((days_until_hike == 7 and should_remind_7) or
-                    (days_until_hike == 3 and should_remind_3)):
+                            context.bot.send_message(
+                                chat_id=telegram_id,
+                                text=message,
+                                parse_mode='Markdown'
+                            )
 
-                    # Ottieni previsioni meteo
-                    coords = hikes_coords.get(name)
-                    weather = None
-                    if coords:
-                        weather = get_weather_forecast(
-                            coords['lat'],
-                            coords['lon'],
-                            date_str,
-                            os.getenv('OPENWEATHER_API_KEY')
-                        )
+            except Exception as e:
+                print(f"❌ Error processing registration: {e}")
+                continue
 
-                    weather_msg = format_weather_message(weather, days_until_hike)
+    except Exception as e:
+        print(f"❌ Critical error in reminder check: {e}")
 
-                    message = (
-                        f"⏰ *Reminder*: You have an upcoming hike!\n\n"
-                        f"🗓 *Date:* {date_str}\n"
-                        f"🏃 *Hike:* {name}\n\n"
-                        f"{weather_msg}\n\n"
-                        f"_Remember to check the required equipment and be prepared!_"
-                    )
-
-                    try:
-                        context.bot.send_message(
-                            chat_id=telegram_id,
-                            text=message,
-                            parse_mode='Markdown'
-                        )
-                    except Exception as e:
-                        print(f"Error sending reminder to {telegram_id}: {e}")
 
 def error_handler(update, context):
     """Gestisce gli errori in modo globale con messaggi user-friendly"""
@@ -1928,8 +1945,8 @@ def handle_custom_location(update, context):
 
     # Crea e invia il pannello dei reminder direttamente
     keyboard = [
-        [InlineKeyboardButton("7 days before", callback_data='reminder_7')],
-        [InlineKeyboardButton("3 days before", callback_data='reminder_3')],
+        [InlineKeyboardButton("5 days before", callback_data='reminder_5')],
+        [InlineKeyboardButton("2 days before", callback_data='reminder_2')],
         [InlineKeyboardButton("Both", callback_data='reminder_both')],
         [InlineKeyboardButton("No reminders", callback_data='reminder_none')]
     ]
@@ -1955,8 +1972,8 @@ def handle_reminder_preferences(update, context):
         raise
 
     keyboard = [
-        [InlineKeyboardButton("7 days before", callback_data='reminder_7')],
-        [InlineKeyboardButton("3 days before", callback_data='reminder_3')],
+        [InlineKeyboardButton("5 days before", callback_data='reminder_5')],
+        [InlineKeyboardButton("2 days before", callback_data='reminder_2')],
         [InlineKeyboardButton("Both", callback_data='reminder_both')],
         [InlineKeyboardButton("No reminders", callback_data='reminder_none')]
     ]
@@ -1984,9 +2001,9 @@ def save_reminder_preference(update, context):
 
     reminder_choice = query.data.replace('reminder_', '')
     reminder_mapping = {
-        '7': '7 days',
-        '3': '3 days',
-        'both': '7 and 3 days',
+        '5': '5 days',
+        '2': '2 days',
+        'both': '5 and 2 days',
         'none': 'No reminders'
     }
     context.user_data['reminder_preference'] = reminder_mapping[reminder_choice]
@@ -2135,13 +2152,12 @@ def cleanup(updater=None):  # Aggiungi il default None
         pass
 
 
-
 def main():
 
     # token bot telegram
     TOKEN = os.environ.get('TELEGRAM_TOKEN')
     # api meteo
-    os.environ['OPENWEATHER_API_KEY'] = os.environ.get('OPENWEATHER_API_KEY')
+    weather_api = os.environ.get('OPENWEATHER_API_KEY')
 
     if not TOKEN:
         raise ValueError("No telegram token provided")
@@ -2169,6 +2185,8 @@ def main():
     # Setup rate limiter
     rate_limiter = RateLimiter(max_requests=5, time_window=60)  # 5 richieste al minuto
     dp.bot_data['rate_limiter'] = rate_limiter
+
+    dp.bot_data['weather_api'] = weather_api
 
     conv_handler = ConversationHandler(
         entry_points=[
@@ -2297,10 +2315,12 @@ def main():
 
     # Aggiungi job scheduler per i reminder
     job_queue = updater.job_queue
+    
     job_queue.run_daily(
         callback=check_and_send_reminders,
         time=datetime_time(hour=9, minute=0, tzinfo=rome_tz)  # Invia reminder alle 9:00 ora di Roma
     )
+
 
     # Registra gli handlers
     dp.add_handler(conv_handler)
