@@ -65,9 +65,9 @@ def setup_google_sheets():
     
     credentials_path = '/home/hikingsrome/google_credentials.json'
     
-    #credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_path, scope) # VM
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_path, scope) # VM
 
-    credentials = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope) # COLAB
+    #credentials = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope) # COLAB
     
     client = gspread.authorize(credentials)
 
