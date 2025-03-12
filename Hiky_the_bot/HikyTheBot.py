@@ -1,0 +1,2194 @@
+#!/usr/bin/env python3
+"""
+HikyTheBot - Telegram bot for managing hiking activities
+Version 2.0 - SQLite database version
+"""
+
+import os
+import sys
+import time
+import atexit
+import json
+import logging
+from datetime import datetime, date, timedelta
+from datetime import time as datetime_time
+import pytz
+import requests
+from dotenv import load_dotenv
+from calendar import monthcalendar, month_name
+
+# Telegram imports
+import telegram
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
+from telegram.ext import (
+    Updater, CommandHandler, MessageHandler, CallbackQueryHandler,
+    ConversationHandler, Filters
+)
+
+# Local imports
+from utils.db_utils import DBUtils
+from utils.db_keyboards import KeyboardBuilder
+from utils.rate_limiter import RateLimiter
+from utils.weather_utils import WeatherUtils
+
+# Load environment variables
+load_dotenv()
+
+# Setup logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Define conversation states
+(CHOOSING, NAME, EMAIL, PHONE, BIRTH_DATE, MEDICAL, HIKE_CHOICE, EQUIPMENT,
+ CAR_SHARE, LOCATION_CHOICE, QUARTIERE_CHOICE, FINAL_LOCATION, CUSTOM_QUARTIERE,
+ ELSEWHERE, NOTES, IMPORTANT_NOTES, REMINDER_CHOICE, PRIVACY_CONSENT, 
+ ADMIN_MENU, ADMIN_CREATE_HIKE, ADMIN_HIKE_NAME, ADMIN_HIKE_DATE, 
+ ADMIN_HIKE_MAX_PARTICIPANTS, ADMIN_HIKE_LOCATION, ADMIN_HIKE_DIFFICULTY,
+ ADMIN_HIKE_DESCRIPTION, ADMIN_CONFIRM_HIKE, ADMIN_ADD_ADMIN) = range(27)
+
+# Define timezone for Rome (for consistent timestamps)
+rome_tz = pytz.timezone('Europe/Rome')
+
+# Maps municipio number to list of quartieri (neighborhoods)
+municipi_data = {
+    'I': ['Centro Storico', 'Trastevere', 'Testaccio', 'Esquilino', 'Prati'],
+    'II': ['Parioli', 'Flaminio', 'Salario', 'Trieste'],
+    'III': ['Monte Sacro', 'Val Melaina', 'Fidene', 'Bufalotta'],
+    'IV': ['San Basilio', 'Tiburtino', 'Pietralata'],
+    'V': ['Prenestino', 'Centocelle', 'Tor Pignattara'],
+    'VI': ['Torre Angela', 'Tor Bella Monaca', 'Lunghezza'],
+    'VII': ['Appio-Latino', 'Tuscolano', 'Cinecittà'],
+    'VIII': ['Ostiense', 'Garbatella', 'San Paolo'],
+    'IX': ['EUR', 'Torrino', 'Laurentino'],
+    'X': ['Ostia', 'Acilia', 'Infernetto'],
+    'XI': ['Portuense', 'Magliana', 'Trullo'],
+    'XII': ['Monte Verde', 'Gianicolense', 'Pisana'],
+    'XIII': ['Aurelio', 'Boccea', 'Casalotti'],
+    'XIV': ['Monte Mario', 'Primavalle', 'Ottavia'],
+    'XV': ['La Storta', 'Cesano', 'Prima Porta']
+}
+
+def check_user_membership(update, context):
+    """Check if a user is a member of the private group"""
+    PRIVATE_GROUP_ID = os.environ.get('TELEGRAM_GROUP_ID')
+    if not PRIVATE_GROUP_ID:
+        logger.error("No TELEGRAM_GROUP_ID provided in environment variables")
+        return False
+
+    user_id = update.effective_user.id
+    try:
+        # Check in local database first
+        if DBUtils.check_in_group(user_id):
+            return True
+            
+        # If not in database, check with Telegram API
+        member = context.bot.get_chat_member(PRIVATE_GROUP_ID, user_id)
+        is_member = member.status in ['member', 'administrator', 'creator']
+        
+        # Update database
+        if is_member:
+            DBUtils.add_group_member(user_id)
+        else:
+            DBUtils.remove_group_member(user_id)
+            
+        return is_member
+    except Exception as e:
+        logger.error(f"Error checking membership: {e}")
+        return False
+
+def handle_non_member(update, context):
+    """Handle users who are not members of the group"""
+    GROUP_INVITE_LINK = "https://t.me/+dku6thBDTGM0MWZk"
+    keyboard = [[InlineKeyboardButton("Join the Group", url=GROUP_INVITE_LINK)]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    message_text = (
+        "⚠️ You need to be a member of Hikings Rome group to use this bot.\n"
+        "Use the button below to join the group and try again using /start."
+    )
+    
+    if update.callback_query:
+        update.callback_query.edit_message_text(text=message_text, reply_markup=reply_markup)
+    else:
+        update.message.reply_text(text=message_text, reply_markup=reply_markup)
+        
+    return ConversationHandler.END
+
+def error_handler(update, context):
+    """Handle errors globally with user-friendly messages"""
+    logger.error(f"Update {update} caused error {context.error}")
+    
+    try:
+        raise context.error
+    except telegram.error.NetworkError:
+        message = (
+            "🤖 Oops! Looks like I had a brief power nap! 😴\n\n"
+            "The server decided to take a coffee break while you were filling out the form. "
+            "I know, bad timing! 🙈\n\n"
+            "Could you use /menu to start again? I promise to stay awake this time! ⚡"
+        )
+    except telegram.error.Unauthorized:
+        # User has blocked the bot
+        return
+    except telegram.error.TimedOut:
+        message = (
+            "⏰ Time out! Even robots need a breather sometimes!\n\n"
+            "Let's start fresh with /menu - I'll be quicker this time! 🏃‍♂️"
+        )
+    except telegram.error.BadRequest as e:
+        if "Message is not modified" in str(e):
+            # Ignore these specific errors
+            return
+        message = (
+            "🤖 *System reboot detected!*\n\n"
+            "Sorry, looks like my circuits got a bit scrambled during a server update. "
+            "These things happen when you're a bot living in the cloud! ☁️\n\n"
+            "Could you help me out by using /menu to start over? "
+            "I promise to keep all my circuits in order this time! 🔧✨"
+        )
+    except Exception:
+        message = (
+            "🤖 *Beep boop... something went wrong!*\n\n"
+            "My processors got a bit tangled up there! 🎭\n"
+            "Let's try again with /menu - second time's the charm! ✨\n\n"
+            "_Note: If this keeps happening, you can always reach out to the hiking group for help!_"
+        )
+
+    # Send message to user if possible
+    if update and update.effective_chat:
+        try:
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=message,
+                parse_mode='Markdown'
+            )
+        except Exception as send_error:
+            logger.error(f"Error sending error message: {send_error}")
+            # Try one last send without markdown if first one fails
+            try:
+                context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=message.replace('*', '').replace('_', '')
+                )
+            except:
+                pass
+
+def menu(update, context):
+    """Handle the /menu command - entry point for the conversation"""
+    logger.info(f"Menu called by user {update.effective_user.id}")
+    
+    user_id = update.effective_user.id
+    username = update.effective_user.username
+
+    # Check group membership
+    if not check_user_membership(update, context):
+        return handle_non_member(update, context)
+    
+    # Add or update user in database
+    DBUtils.add_or_update_user(user_id, username)
+    
+    # Check rate limiting
+    if not context.bot_data.get('rate_limiter').is_allowed(user_id):
+        if update.callback_query:
+            update.callback_query.answer("Too many requests. Please wait a minute.")
+            update.callback_query.edit_message_text(
+                "⚠️ You're making too many requests. Please wait a minute and try again."
+            )
+        else:
+            update.message.reply_text(
+                "⚠️ You're making too many requests. Please wait a minute and try again."
+            )
+        return ConversationHandler.END
+    
+    # Check if user is an admin
+    is_admin = DBUtils.check_is_admin(user_id)
+    
+    # Verify if user has given privacy consent
+    privacy_settings = DBUtils.get_privacy_settings(user_id)
+    if not privacy_settings or not privacy_settings.get('basic_consent'):
+        # If no consent, show privacy policy first
+        return cmd_privacy(update, context)
+    
+    # Clear user data for fresh start
+    context.user_data.clear()
+    context.chat_data.clear()
+    
+    # Store admin status in user_data
+    context.user_data['is_admin'] = is_admin
+    
+    # Create and send appropriate keyboard
+    username = update.effective_user.username or "there"
+    welcome_message = (
+        f"Hi {username} 👋 \n"
+        f"I'm Hiky, your digital sherpa for @hikingsrome.\n"
+        f"I can't climb mountains, but I sure can answer your messages. \n"
+        f"So, how can I help you?"
+    )
+    
+    # Add admin button if user is admin
+    keyboard = [
+        [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
+        [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
+        [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
+    ]
+    
+    if is_admin:
+        keyboard.append([InlineKeyboardButton("Admin Menu 🛠️", callback_data='admin_menu')])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if update.callback_query:
+        update.callback_query.edit_message_text(welcome_message, reply_markup=reply_markup)
+    else:
+        update.message.reply_text(welcome_message, reply_markup=reply_markup)
+    
+    return CHOOSING
+
+def cmd_admin(update, context):
+    """Handle /admin command - show admin menu"""
+    user_id = update.effective_user.id
+    
+    # Check if user is admin
+    if not DBUtils.check_is_admin(user_id):
+        update.message.reply_text(
+            "⚠️ You don't have admin privileges to use this command."
+        )
+        return ConversationHandler.END
+    
+    reply_markup = KeyboardBuilder.create_admin_keyboard()
+    
+    update.message.reply_text(
+        "👑 *Admin Menu*\n\n"
+        "What would you like to manage?",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_MENU
+
+def handle_menu_choice(update, context):
+    """Handle menu choice selections"""
+    query = update.callback_query
+    logger.info(f"Menu choice: {query.data} by user {query.from_user.id}")
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        logger.error(f"Error in query.answer(): {e}")
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+    
+    if not check_user_membership(update, context):
+        return handle_non_member(update, context)
+    
+    if query.data == 'signup':
+        # Check hike availability before starting questionnaire
+        available_hikes = DBUtils.get_available_hikes(query.from_user.id)
+        
+        if not available_hikes:
+            query.edit_message_text(
+                "There are no available hikes at the moment.\n"
+                "Use /menu to go back to the home menu."
+            )
+            return CHOOSING
+        
+        # Store available hikes for later use
+        context.user_data['available_hikes'] = available_hikes
+        query.edit_message_text("👋 Name and surname?")
+        return NAME
+    
+    elif query.data == 'myhikes':
+        return show_my_hikes(query, context)
+    
+    elif query.data == 'links':
+        reply_markup = KeyboardBuilder.create_links_keyboard()
+        
+        query.edit_message_text(
+            "Here are some useful links:",
+            reply_markup=reply_markup
+        )
+        return CHOOSING
+    
+    elif query.data == 'back_to_menu':
+        return menu(update, context)
+    
+    elif query.data == 'admin_menu':
+        # Check if user is admin
+        user_id = query.from_user.id
+        if not DBUtils.check_is_admin(user_id):
+            query.edit_message_text(
+                "⚠️ You don't have admin privileges to use this menu."
+            )
+            return CHOOSING
+        
+        reply_markup = KeyboardBuilder.create_admin_keyboard()
+        
+        query.edit_message_text(
+            "👑 *Admin Menu*\n\n"
+            "What would you like to manage?",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        return ADMIN_MENU
+
+def handle_admin_choice(update, context):
+    """Handle admin menu choices"""
+    query = update.callback_query
+    logger.info(f"Admin choice: {query.data} by user {query.from_user.id}")
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+    
+    # Check admin status
+    user_id = query.from_user.id
+    if not DBUtils.check_is_admin(user_id):
+        query.edit_message_text(
+            "⚠️ You don't have admin privileges to use this menu."
+        )
+        return CHOOSING
+    
+    if query.data == 'admin_create_hike':
+        query.edit_message_text(
+            "🏔️ *Create New Hike*\n\n"
+            "Let's set up a new hike. First, what's the name of the hike?",
+            parse_mode='Markdown'
+        )
+        return ADMIN_HIKE_NAME
+    
+    elif query.data == 'admin_manage_hikes':
+        # Get all active hikes
+        hikes = DBUtils.get_available_hikes()
+        
+        if not hikes:
+            query.edit_message_text(
+                "There are no active hikes at the moment.\n"
+                "Use /admin to go back to the admin menu."
+            )
+            return ADMIN_MENU
+        
+        context.user_data['admin_hikes'] = hikes
+        reply_markup = KeyboardBuilder.create_admin_hikes_keyboard(hikes)
+        
+        query.edit_message_text(
+            "📝 *Manage Hikes*\n\n"
+            "Select a hike to manage:",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        return ADMIN_MENU
+    
+    elif query.data == 'admin_view_participants':
+        # Get all active hikes
+        hikes = DBUtils.get_available_hikes()
+        
+        if not hikes:
+            query.edit_message_text(
+                "There are no active hikes at the moment.\n"
+                "Use /admin to go back to the admin menu."
+            )
+            return ADMIN_MENU
+        
+        context.user_data['admin_hikes'] = hikes
+        reply_markup = KeyboardBuilder.create_admin_hikes_keyboard(hikes)
+        
+        query.edit_message_text(
+            "👥 *View Participants*\n\n"
+            "Select a hike to view participants:",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        return ADMIN_MENU
+    
+    elif query.data == 'admin_add_admin':
+        query.edit_message_text(
+            "👑 *Add Admin*\n\n"
+            "Please enter the Telegram ID of the user you want to make an admin:"
+        )
+        return ADMIN_ADD_ADMIN
+    
+    elif query.data.startswith('admin_hike_'):
+        hike_id = int(query.data.replace('admin_hike_', ''))
+        context.user_data['selected_admin_hike'] = hike_id
+        
+        reply_markup = KeyboardBuilder.create_admin_hike_options_keyboard(hike_id)
+        
+        # Find the hike details
+        hikes = context.user_data.get('admin_hikes', [])
+        selected_hike = next((h for h in hikes if h['id'] == hike_id), None)
+        
+        if not selected_hike:
+            query.edit_message_text(
+                "Hike not found. Please try again."
+            )
+            return ADMIN_MENU
+        
+        hike_date = datetime.strptime(selected_hike['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+        
+        query.edit_message_text(
+            f"🏔️ *{selected_hike['hike_name']}*\n\n"
+            f"Date: {hike_date}\n"
+            f"Participants: {selected_hike['current_participants']}/{selected_hike['max_participants']}\n"
+            f"Difficulty: {selected_hike.get('difficulty', 'Not set')}\n\n"
+            f"What would you like to do with this hike?",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        return ADMIN_MENU
+    
+    elif query.data.startswith('admin_edit_'):
+        # Implement edit hike functionality
+        hike_id = int(query.data.replace('admin_edit_', ''))
+        context.user_data['editing_hike_id'] = hike_id
+        
+        query.edit_message_text(
+            "✏️ *Edit Hike*\n\n"
+            "What's the new name for this hike?",
+            parse_mode='Markdown'
+        )
+        return ADMIN_HIKE_NAME
+    
+    elif query.data.startswith('admin_participants_'):
+        # Implement view participants functionality
+        hike_id = int(query.data.replace('admin_participants_', ''))
+        
+        # This would be implemented in a new function to fetch and display participants
+        # For now, we'll just return to admin menu
+        query.edit_message_text(
+            "Feature coming soon! Check back later."
+        )
+        return ADMIN_MENU
+    
+    elif query.data.startswith('admin_cancel_'):
+        # Implement cancel hike functionality
+        # This would need careful handling to notify registered participants
+        hike_id = int(query.data.replace('admin_cancel_', ''))
+        
+        # For now, just confirm cancellation
+        keyboard = [
+            [
+                InlineKeyboardButton("Yes, Cancel Hike", callback_data=f'confirm_cancel_hike_{hike_id}'),
+                InlineKeyboardButton("No, Keep Hike", callback_data='admin_manage_hikes')
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        query.edit_message_text(
+            "⚠️ *Cancel Hike*\n\n"
+            "Are you sure you want to cancel this hike? "
+            "This will notify all registered participants and remove their registrations.",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        return ADMIN_MENU
+    
+    elif query.data.startswith('confirm_cancel_hike_'):
+        # Implement confirmed hike cancellation
+        # This would need to update the database and send notifications
+        query.edit_message_text(
+            "Feature coming soon! Check back later."
+        )
+        return ADMIN_MENU
+    
+    return ADMIN_MENU
+
+def add_admin_handler(update, context):
+    """Handle adding a new admin"""
+    user_id = update.effective_user.id
+    
+    # Check if user is admin
+    if not DBUtils.check_is_admin(user_id):
+        update.message.reply_text(
+            "⚠️ You don't have admin privileges to use this command."
+        )
+        return ConversationHandler.END
+    
+    # Get new admin ID from message
+    try:
+        new_admin_id = int(update.message.text.strip())
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Invalid Telegram ID. Please enter a valid numeric ID."
+        )
+        return ADMIN_ADD_ADMIN
+    
+    # Check if user exists and add as admin
+    if not DBUtils.check_user_exists(new_admin_id):
+        update.message.reply_text(
+            "⚠️ This user has not interacted with the bot yet. "
+            "They need to use /start first."
+        )
+        return ADMIN_MENU
+    
+    result = DBUtils.add_admin(new_admin_id, user_id)
+    
+    if result['success']:
+        update.message.reply_text(
+            f"✅ User with ID {new_admin_id} has been added as an admin successfully."
+        )
+    else:
+        update.message.reply_text(
+            f"❌ Failed to add admin: {result['error']}"
+        )
+    
+    # Return to admin menu
+    reply_markup = KeyboardBuilder.create_admin_keyboard()
+    update.message.reply_text(
+        "What would you like to do next?",
+        reply_markup=reply_markup
+    )
+    return ADMIN_MENU
+
+def admin_save_hike_name(update, context):
+    """Save hike name from admin input"""
+    context.chat_data['last_state'] = ADMIN_HIKE_NAME
+    context.user_data['hike_name'] = update.message.text
+    
+    # Ask for hike date
+    update.message.reply_text(
+        "📅 What's the date for this hike?\n"
+        "Please enter the date in format DD/MM/YYYY."
+    )
+    return ADMIN_HIKE_DATE
+
+def admin_save_hike_date(update, context):
+    """Save hike date from admin input"""
+    context.chat_data['last_state'] = ADMIN_HIKE_DATE
+    
+    # Validate date format
+    date_str = update.message.text
+    try:
+        hike_date = datetime.strptime(date_str, '%d/%m/%Y')
+        
+        # Check if date is in the future
+        if hike_date.date() <= date.today():
+            update.message.reply_text(
+                "⚠️ The date must be in the future. Please enter a valid future date:"
+            )
+            return ADMIN_HIKE_DATE
+            
+        # Store in ISO format for database
+        context.user_data['hike_date'] = hike_date.strftime('%Y-%m-%d')
+        
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Invalid date format. Please enter the date as DD/MM/YYYY:"
+        )
+        return ADMIN_HIKE_DATE
+    
+    # Ask for maximum participants
+    update.message.reply_text(
+        "👥 What's the maximum number of participants for this hike?"
+    )
+    return ADMIN_HIKE_MAX_PARTICIPANTS
+
+def admin_save_max_participants(update, context):
+    """Save maximum participants from admin input"""
+    context.chat_data['last_state'] = ADMIN_HIKE_MAX_PARTICIPANTS
+    
+    # Validate number
+    try:
+        max_participants = int(update.message.text)
+        if max_participants <= 0:
+            raise ValueError("Must be positive")
+            
+        context.user_data['max_participants'] = max_participants
+        
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Please enter a valid positive number:"
+        )
+        return ADMIN_HIKE_MAX_PARTICIPANTS
+    
+    # Ask for location
+    update.message.reply_text(
+        "📍 Please enter the location coordinates for this hike.\n"
+        "Format: latitude,longitude (e.g., 41.9028,12.4964)"
+    )
+    return ADMIN_HIKE_LOCATION
+
+def admin_save_location(update, context):
+    """Save hike location from admin input"""
+    context.chat_data['last_state'] = ADMIN_HIKE_LOCATION
+    
+    # Validate coordinates
+    coords_str = update.message.text
+    try:
+        lat, lon = map(float, coords_str.split(','))
+        
+        # Basic validation
+        if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+            raise ValueError("Invalid coordinates range")
+            
+        context.user_data['latitude'] = lat
+        context.user_data['longitude'] = lon
+        
+    except (ValueError, IndexError):
+        update.message.reply_text(
+            "⚠️ Invalid coordinates format. Please enter as latitude,longitude:"
+        )
+        return ADMIN_HIKE_LOCATION
+    
+    # Ask for difficulty
+    reply_markup = KeyboardBuilder.create_difficulty_keyboard()
+    update.message.reply_text(
+        "📊 Select the difficulty level for this hike:",
+        reply_markup=reply_markup
+    )
+    return ADMIN_HIKE_DIFFICULTY
+
+def admin_save_difficulty(update, context):
+    """Save hike difficulty from admin selection"""
+    query = update.callback_query
+    query.answer()
+    
+    difficulty = query.data.replace('difficulty_', '')
+    context.user_data['difficulty'] = difficulty.capitalize()
+    
+    # Ask for description
+    query.edit_message_text(
+        "📝 Please enter a description for this hike. "
+        "Include any important details like meeting point, what to bring, etc."
+    )
+    return ADMIN_HIKE_DESCRIPTION
+
+def admin_save_description(update, context):
+    """Save hike description from admin input"""
+    context.chat_data['last_state'] = ADMIN_HIKE_DESCRIPTION
+    context.user_data['description'] = update.message.text
+    
+    # Show summary and confirm
+    hike_data = context.user_data
+    
+    # Format date for display
+    display_date = datetime.strptime(hike_data['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+    
+    summary = (
+        f"🏔️ *New Hike Summary*\n\n"
+        f"Name: {hike_data['hike_name']}\n"
+        f"Date: {display_date}\n"
+        f"Max Participants: {hike_data['max_participants']}\n"
+        f"Location: {hike_data['latitude']}, {hike_data['longitude']}\n"
+        f"Difficulty: {hike_data['difficulty']}\n\n"
+        f"Description:\n{hike_data['description']}\n\n"
+        f"Is this correct?"
+    )
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("Yes, Create Hike", callback_data='confirm_create_hike'),
+            InlineKeyboardButton("No, Cancel", callback_data='cancel_create_hike')
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    update.message.reply_text(
+        summary,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_CONFIRM_HIKE
+
+def admin_confirm_hike(update, context):
+    """Handle confirmation of new hike creation"""
+    query = update.callback_query
+    query.answer()
+    
+    if query.data == 'confirm_create_hike':
+        # Save the hike to database
+        hike_data = {
+            'hike_name': context.user_data.get('hike_name'),
+            'hike_date': context.user_data.get('hike_date'),
+            'max_participants': context.user_data.get('max_participants'),
+            'latitude': context.user_data.get('latitude'),
+            'longitude': context.user_data.get('longitude'),
+            'difficulty': context.user_data.get('difficulty'),
+            'description': context.user_data.get('description')
+        }
+        
+        result = DBUtils.add_hike(hike_data, query.from_user.id)
+        
+        if result['success']:
+            query.edit_message_text(
+                "✅ New hike created successfully!"
+            )
+        else:
+            query.edit_message_text(
+                f"❌ Failed to create hike: {result['error']}"
+            )
+    else:
+        query.edit_message_text(
+            "❌ Hike creation cancelled."
+        )
+    
+    # Return to admin menu
+    reply_markup = KeyboardBuilder.create_admin_keyboard()
+    context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="What would you like to do next?",
+        reply_markup=reply_markup
+    )
+    return ADMIN_MENU
+
+def cmd_privacy(update, context):
+    """Handle /privacy command - show and manage privacy settings"""
+    user_id = update.effective_user.id
+    username = update.effective_user.username or 'Not set'
+    
+    if not check_user_membership(update, context):
+        return handle_non_member(update, context)
+    
+    # Add or update user in database
+    DBUtils.add_or_update_user(user_id, username)
+    
+    # Check current privacy settings
+    privacy_settings = DBUtils.get_privacy_settings(user_id)
+    
+    if privacy_settings and privacy_settings.get('basic_consent'):
+        # If user already gave consent, show current settings
+        message = (
+            "🔐 *Your current privacy settings:*\n\n"
+            f"• Basic consent (Required): ✅\n"
+            f"• Share contacts for car sharing: {'✅' if privacy_settings.get('car_sharing_consent') else '❌'}\n"
+            f"• Photo sharing consent: {'✅' if privacy_settings.get('photo_consent') else '❌'}\n"
+            f"• Marketing communications: {'✅' if privacy_settings.get('marketing_consent') else '❌'}\n\n"
+            "Would you like to modify these settings?"
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("✏️ Modify settings", callback_data='privacy_modify')],
+            [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
+        ]
+    else:
+        # If user never gave consent
+        message = (
+            "🔐 *Privacy Policy*\n\n"
+            "Please review our privacy policy and provide your consent preferences.\n\n"
+            "*Required consent:*\n"
+            "• Collection of basic data for hike registration\n"
+            "• Emergency contact information\n"
+            "• Age verification\n\n"
+            "*Optional consents:*\n"
+            "• Share contacts for car sharing arrangements\n"
+            "• Photo sharing during hikes\n"
+            "• Marketing communications"
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("📜 View full policy", url="https://www.hikingsrome.com/privacy")],
+            [InlineKeyboardButton("✅ Set privacy preferences", callback_data='privacy_start')]
+        ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if update.callback_query:
+        update.callback_query.edit_message_text(
+            message, 
+            reply_markup=reply_markup, 
+            parse_mode='Markdown'
+        )
+    else:
+        update.message.reply_text(
+            message, 
+            reply_markup=reply_markup, 
+            parse_mode='Markdown'
+        )
+    
+    return PRIVACY_CONSENT
+
+def handle_privacy_choices(update, context):
+    """Handle privacy consent choices"""
+    query = update.callback_query
+    choice = query.data.replace('privacy_', '')
+    logger.info(f"Privacy choice: {choice}")
+    
+    if choice == 'start' or choice == 'modify':
+        # Initialize basic choices
+        privacy_settings = DBUtils.get_privacy_settings(query.from_user.id)
+        
+        # Initialize choices based on existing record if available
+        context.user_data['privacy_choices'] = {
+            'basic_consent': True,  # Always true, required
+            'car_sharing_consent': privacy_settings.get('car_sharing_consent', False) if privacy_settings else False,
+            'photo_consent': privacy_settings.get('photo_consent', False) if privacy_settings else False,
+            'marketing_consent': privacy_settings.get('marketing_consent', False) if privacy_settings else False
+        }
+        
+        message_text = (
+            "🔐 *Privacy Settings*\n\n"
+            "Basic consent is required and includes:\n"
+            "• Collection of basic data for registration\n"
+            "• Emergency contact information\n"
+            "• Age verification\n\n"
+            "Optional consents (click to toggle):"
+        )
+        
+        reply_markup = KeyboardBuilder.create_privacy_settings_keyboard(context.user_data['privacy_choices'])
+        
+        try:
+            query.edit_message_text(
+                text=message_text,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+        except telegram.error.BadRequest as e:
+            if "Message is not modified" not in str(e):
+                raise
+                
+        return PRIVACY_CONSENT
+        
+    elif choice in ['carsharing', 'photos', 'marketing']:
+        # Toggle specific consent
+        consent_mapping = {
+            'carsharing': 'car_sharing_consent',
+            'photos': 'photo_consent',
+            'marketing': 'marketing_consent'
+        }
+        
+        # Initialize if not exists
+        if 'privacy_choices' not in context.user_data:
+            privacy_settings = DBUtils.get_privacy_settings(query.from_user.id)
+            context.user_data['privacy_choices'] = {
+                'basic_consent': True,
+                'car_sharing_consent': privacy_settings.get('car_sharing_consent', False) if privacy_settings else False,
+                'photo_consent': privacy_settings.get('photo_consent', False) if privacy_settings else False,
+                'marketing_consent': privacy_settings.get('marketing_consent', False) if privacy_settings else False
+            }
+        
+        # Toggle consent
+        consent_key = consent_mapping[choice]
+        current_value = context.user_data['privacy_choices'][consent_key]
+        context.user_data['privacy_choices'][consent_key] = not current_value
+        
+        reply_markup = KeyboardBuilder.create_privacy_settings_keyboard(context.user_data['privacy_choices'])
+        
+        try:
+            query.edit_message_text(
+                text="🔐 *Privacy Settings*\n\n"
+                     "Basic consent is required and includes:\n"
+                     "• Collection of basic data for registration\n"
+                     "• Emergency contact information\n"
+                     "• Age verification\n\n"
+                     "Optional consents (click to toggle):",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+        except telegram.error.BadRequest as e:
+            if "Message is not modified" in str(e):
+                # Force update by adding invisible character
+                query.edit_message_text(
+                    text="🔐 *Privacy Settings*\n\n"
+                         "Basic consent is required and includes:\n"
+                         "• Collection of basic data for registration\n"
+                         "• Emergency contact information\n"
+                         "• Age verification\n\n"
+                         "Optional consents (click to toggle):\u200B",
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+            else:
+                logger.error(f"Error updating message: {e}")
+                
+        return PRIVACY_CONSENT
+        
+    elif choice == 'save':
+        try:
+            choices = context.user_data['privacy_choices']
+            
+            # Update settings in database
+            settings = {
+                'basic_consent': True,  # Always required
+                'car_sharing_consent': choices.get('car_sharing_consent', False),
+                'photo_consent': choices.get('photo_consent', False),
+                'marketing_consent': choices.get('marketing_consent', False),
+                'consent_version': '1.0'
+            }
+            
+            DBUtils.update_privacy_settings(query.from_user.id, settings)
+            
+            # Show confirmation
+            keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+            
+            message = (
+                "✅ Privacy settings saved successfully!\n\n"
+                "*Your current settings:*\n"
+                "• Basic consent (Required): ✅\n"
+                f"• Share contacts for car sharing: {'✅' if choices.get('car_sharing_consent') else '❌'}\n"
+                f"• Photo sharing: {'✅' if choices.get('photo_consent') else '❌'}\n"
+                f"• Marketing communications: {'✅' if choices.get('marketing_consent') else '❌'}"
+            )
+            
+            query.edit_message_text(
+                text=message,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+            
+            return CHOOSING
+            
+        except Exception as e:
+            logger.error(f"Error saving privacy choices: {e}")
+            query.answer("Error saving preferences. Please try again.", show_alert=True)
+            return PRIVACY_CONSENT
+            
+    return CHOOSING
+
+def cmd_bug(update, context):
+    """Handle /bug command - report a bug"""
+    if not check_user_membership(update, context):
+        return handle_non_member(update, context)
+    
+    logger.info("Bug command called")
+    
+    message = (
+        "🐛 Found a bug? Looks like our robot friends need some maintenance!\n\n"
+        "Please send an email to *hikingsrome@gmail.com* describing what happened. "
+        "Screenshots are worth a thousand bug reports! 📸\n\n"
+        "_Don't worry, even the most advanced AI occasionally trips over its own algorithms!_ 🤖"
+    )
+    
+    keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    try:
+        update.message.reply_text(message, parse_mode='Markdown', reply_markup=reply_markup)
+    except Exception as e:
+        logger.error(f"Error in cmd_bug: {e}")
+        update.message.reply_text(
+            message.replace('*', '').replace('_', ''),
+            reply_markup=reply_markup
+        )
+    
+    return CHOOSING
+
+def handle_lost_conversation(update, context):
+    """Handle cases where conversation state is lost"""
+    message = (
+        "🤖 *Oops! Server Update Detected!* 🔄\n\n"
+        "Hey there! While you were filling out the form, I received some fancy new updates. "
+        "Unfortunately, that means I lost track of where we were... 😅\n\n"
+        "Could you help me out by starting fresh with /menu? "
+        "I promise to keep all your answers safe this time! 🚀\n\n"
+        "_P.S. Sorry for the interruption - even robots need occasional upgrades!_ ✨"
+    )
+    
+    try:
+        # If it's a callback query, respond to avoid loading spinner
+        if isinstance(update, telegram.Update) and update.callback_query:
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(
+                text=message,
+                parse_mode='Markdown'
+            )
+        else:
+            # If it's a regular message
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=message,
+                parse_mode='Markdown'
+            )
+    except Exception as e:
+        logger.error(f"Error in handle_lost_conversation: {e}")
+        # Fallback without markdown if needed
+        try:
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=message.replace('*', '').replace('_', '')
+            )
+        except:
+            pass
+            
+    return ConversationHandler.END
+
+def restart(update, context):
+    """Handle /restart command - reset the bot state"""
+    logger.info(f"Restart called by user {update.effective_user.id}")
+    user_id = update.effective_user.id
+    current_state = context.chat_data.get('last_state')
+    
+    if not check_user_membership(update, context):
+        return handle_non_member(update, context)
+        
+    # If user was in the middle of filling a form, ask for confirmation
+    non_form_states = [None, CHOOSING, PRIVACY_CONSENT, IMPORTANT_NOTES, ADMIN_MENU]
+    if current_state and current_state not in non_form_states:
+        logger.info("User in form - asking confirmation")
+        reply_markup = KeyboardBuilder.create_yes_no_keyboard('yes_restart', 'no_restart')
+        
+        update.message.reply_text(
+            "⚠️ You are in the middle of registration.\n"
+            "Are you sure you want to restart? All progress will be lost.",
+            reply_markup=reply_markup
+        )
+        return current_state
+        
+    # If no form in progress, simply reset the bot
+    logger.info("No form in progress - resetting bot")
+    context.user_data.clear()
+    context.chat_data.clear()
+    
+    return menu(update, context)
+
+def handle_restart_confirmation(update, context):
+    """Handle restart confirmation"""
+    logger.info("Handling restart confirmation")
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    if query.data == 'yes_restart':
+        try:
+            query.message.delete()  # Delete confirmation message
+        except:
+            pass
+        context.user_data.clear()
+        context.chat_data.clear()
+        return menu(update, context)
+    else:
+        current_state = context.chat_data.get('last_state', CHOOSING)
+        try:
+            query.edit_message_text("✅ Restart cancelled. You can continue from where you left off.")
+            # Send appropriate question based on state
+            if current_state == NAME:
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="👋 Name and surname?"
+                )
+            elif current_state == EMAIL:
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="📧 Email?"
+                )
+            elif current_state == PHONE:
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="📱 Phone number?"
+                )
+            # Add more states as needed...
+        except Exception as e:
+            logger.error(f"Error in handle_restart_confirmation: {e}")
+            # Fallback in case of error
+            try:
+                context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="Please continue with your previous answer."
+                )
+            except:
+                pass
+                
+        return current_state
+
+def show_my_hikes(update, context):
+    """Handle viewing registered hikes"""
+    if isinstance(update, CallbackQuery):
+        user_id = update.from_user.id
+        query = update
+    else:
+        user_id = update.message.from_user.id
+        query = None
+        
+    hikes = DBUtils.get_user_hikes(user_id)
+    
+    if not hikes:
+        message = "You are not registered for any hikes yet.\nUse /menu to go back to the home menu."
+        if query:
+            query.edit_message_text(message)
+        else:
+            update.message.reply_text(message)
+        return ConversationHandler.END
+        
+    context.user_data['my_hikes'] = hikes
+    context.user_data['current_hike_index'] = 0
+    
+    return show_hike_details(update, context)
+
+def show_hike_details(update, context):
+    """Show details of a specific hike the user is registered for"""
+    hikes = context.user_data['my_hikes']
+    current_index = context.user_data['current_hike_index']
+    hike = hikes[current_index]
+    
+    # Format date for display
+    if isinstance(hike['hike_date'], str):
+        hike_date = datetime.strptime(hike['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+    else:
+        hike_date = hike['hike_date'].strftime('%d/%m/%Y')
+        
+    # Create navigation buttons
+    reply_markup = KeyboardBuilder.create_hike_navigation_keyboard(current_index, len(hikes))
+    
+    # Prepare the message
+    message_text = (
+        f"🗓 *Date:* {hike_date}\n"
+        f"🏃 *Hike:* {hike['hike_name']}\n"
+        f"🚗 *Car sharing:* {'Yes' if hike.get('car_sharing') else 'No'}\n\n"
+        f"Hike {current_index + 1} of {len(hikes)}"
+    )
+    
+    if isinstance(update, CallbackQuery):
+        update.edit_message_text(
+            text=message_text,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    else:
+        update.message.reply_text(
+            text=message_text,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        
+    return CHOOSING
+
+def handle_hike_navigation(update, context):
+    """Handle navigation between user's hikes"""
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    if query.data == 'next_hike':
+        context.user_data['current_hike_index'] += 1
+    elif query.data == 'prev_hike':
+        context.user_data['current_hike_index'] -= 1
+        
+    return show_hike_details(query, context)
+
+def handle_cancel_request(update, context):
+    """Handle initial cancellation request"""
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    # Get hike index to cancel
+    hike_index = int(query.data.split('_')[2])
+    hike = context.user_data['my_hikes'][hike_index]
+    context.user_data['hike_to_cancel'] = hike
+    
+    reply_markup = KeyboardBuilder.create_yes_no_keyboard('confirm_cancel', 'abort_cancel')
+    
+    # Format date for display
+    if isinstance(hike['hike_date'], str):
+        hike_date = datetime.strptime(hike['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+    else:
+        hike_date = hike['hike_date'].strftime('%d/%m/%Y')
+    
+    query.edit_message_text(
+        f"Are you sure you want to cancel your registration for:\n\n"
+        f"🗓 {hike_date}\n"
+        f"🏃 {hike['hike_name']}?",
+        reply_markup=reply_markup
+    )
+    return CHOOSING
+
+def handle_cancel_confirmation(update, context):
+    """Handle confirmation of hike cancellation"""
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    if query.data == 'abort_cancel':
+        return show_hike_details(query, context)
+        
+    hike_to_cancel = context.user_data['hike_to_cancel']
+    user_id = query.from_user.id
+    
+    # Cancel registration in database
+    result = DBUtils.cancel_registration(user_id, hike_to_cancel['registration_id'])
+    
+    if result['success']:
+        query.edit_message_text(
+            "✅ Registration successfully cancelled.\n"
+            "Use /menu to go back to the home menu."
+        )
+    else:
+        query.edit_message_text(
+            f"❌ Could not cancel registration: {result.get('error', 'Unknown error')}.\n"
+            "Use /menu to go back to the home menu."
+        )
+        
+    return ConversationHandler.END
+
+# Registration form handlers
+def save_name(update, context):
+    """Save name from user input"""
+    context.chat_data['last_state'] = NAME
+    context.user_data['name_surname'] = update.message.text
+    update.message.reply_text("📧 Email?")
+    return EMAIL
+
+def save_email(update, context):
+    """Save email from user input"""
+    context.chat_data['last_state'] = EMAIL
+    context.user_data['email'] = update.message.text
+    update.message.reply_text("📱 Phone number?")
+    return PHONE
+
+def save_phone(update, context):
+    """Save phone number from user input"""
+    context.chat_data['last_state'] = PHONE
+    context.user_data['phone'] = update.message.text
+    update.message.reply_text(
+        "📅 Select the decade of your birth year:",
+        reply_markup=create_year_selector()
+    )
+    return BIRTH_DATE
+
+def create_year_selector():
+    """Create keyboard for selecting birth year decade"""
+    current_year = date.today().year
+    current_month = date.today().month
+    current_day = date.today().day
+
+    keyboard = []
+    decades = list(range(1980, (current_year - 18) + 1, 10))
+    for i in range(0, len(decades), 2):
+        row = []
+        for year in decades[i:i+2]:
+            row.append(InlineKeyboardButton(
+                f"{year}s",
+                callback_data=f'decade_{year}'
+            ))
+        keyboard.append(row)
+    return InlineKeyboardMarkup(keyboard)
+
+def create_year_buttons(decade):
+    """Create keyboard for selecting specific year within decade"""
+    keyboard = []
+    current_year = date.today().year
+    end_year = min(decade + 10, current_year - 18 + 1)
+    years = list(range(decade, end_year))
+    for i in range(0, len(years), 3):
+        row = []
+        for year in years[i:i+3]:
+            row.append(InlineKeyboardButton(
+                str(year),
+                callback_data=f'year_{year}'
+            ))
+        keyboard.append(row)
+    return InlineKeyboardMarkup(keyboard)
+
+def create_month_buttons(year):
+    """Create keyboard for selecting birth month"""
+    keyboard = []
+    current_date = date.today()
+    limit_date = date(current_date.year - 18, current_date.month, current_date.day)
+
+    if year == limit_date.year:
+        max_month = limit_date.month
+    else:
+        max_month = 12
+
+    for i in range(1, max_month + 1, 3):
+        row = []
+        for month in range(i, min(i + 3, max_month + 1)):
+            row.append(InlineKeyboardButton(
+                month_name[month],
+                callback_data=f'month_{year}_{month}'
+            ))
+        keyboard.append(row)
+
+    return InlineKeyboardMarkup(keyboard)
+
+def create_calendar(year, month):
+    """Create calendar for selecting birth day"""
+    keyboard = []
+    current_date = date.today()
+    limit_date = date(current_date.year - 18, current_date.month, current_date.day)
+
+    keyboard.append([
+        InlineKeyboardButton("<<", callback_data=f'year_{year-1}_{month}'),
+        InlineKeyboardButton(f"{year}", callback_data=f'ignore'),
+        InlineKeyboardButton(">>", callback_data=f'year_{year+1}_{month}')
+    ])
+
+    keyboard.append([
+        InlineKeyboardButton("<<", callback_data=f'month_{year}_{month-1}'),
+        InlineKeyboardButton(f"{month_name[month]}", callback_data=f'ignore'),
+        InlineKeyboardButton(">>", callback_data=f'month_{year}_{month+1}')
+    ])
+
+    keyboard.append([
+        InlineKeyboardButton(day, callback_data='ignore')
+        for day in ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
+    ])
+
+    for week in monthcalendar(year, month):
+        row = []
+        for day in week:
+            if day == 0:
+                row.append(InlineKeyboardButton(" ", callback_data='ignore'))
+            else:
+                selected_date = date(year, month, day)
+                if selected_date <= limit_date:
+                    row.append(InlineKeyboardButton(
+                        str(day),
+                        callback_data=f'date_{year}_{month}_{day}'
+                    ))
+                else:
+                    row.append(InlineKeyboardButton(" ", callback_data='ignore'))
+        keyboard.append(row)
+
+    return InlineKeyboardMarkup(keyboard)
+
+def handle_calendar(update, context):
+    """Handle date selection from calendar"""
+    context.chat_data['last_state'] = BIRTH_DATE
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    data = query.data.split('_')
+    action = data[0]
+    
+    if action == 'decade':
+        decade = int(data[1])
+        query.edit_message_text(
+            "📅 Select your birth year:",
+            reply_markup=create_year_buttons(decade)
+        )
+        return BIRTH_DATE
+        
+    elif action == 'year':
+        year = int(data[1])
+        context.user_data['birth_year'] = year
+        query.edit_message_text(
+            "📅 Select birth month:",
+            reply_markup=create_month_buttons(year)
+        )
+        return BIRTH_DATE
+        
+    elif action == 'month':
+        year = int(data[1])
+        month = int(data[2])
+        query.edit_message_text(
+            "📅 Select birth day:",
+            reply_markup=create_calendar(year, month)
+        )
+        return BIRTH_DATE
+        
+    elif action == 'date':
+        year = int(data[1])
+        month = int(data[2])
+        day = int(data[3])
+        
+        selected_date = f"{day:02d}/{month:02d}/{year}"
+        context.user_data['birth_date'] = selected_date
+        
+        query.edit_message_text(f"📅 Selected birth date: {selected_date}")
+        
+        context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="🏥 Medical conditions\n"
+                 "_Do you have any medical conditions that might create difficulties for you "
+                 "(Knee pain, cardiopathy, allergies etc.)?_",
+            parse_mode='Markdown'
+        )
+        return MEDICAL
+        
+    return BIRTH_DATE
+
+def save_medical(update, context):
+    """Save medical conditions from user input"""
+    context.chat_data['last_state'] = MEDICAL
+    context.user_data['medical_conditions'] = update.message.text
+    context.user_data['selected_hikes'] = []
+    
+    # Get available hikes
+    available_hikes = context.user_data['available_hikes']
+    reply_markup = KeyboardBuilder.create_hikes_selection_keyboard(available_hikes)
+    
+    update.message.reply_text(
+        "🎯 Choose the hike(s) you want to participate in:\n\n"
+        "🟢 Many spots available\n"
+        "🔴 Last spot available\n"
+        "⚫ Fully booked\n\n"
+        "_Click on the hike name to select/deselect._\n"
+        "_Click '✅ Confirm selection' when done._",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return HIKE_CHOICE
+
+def handle_hike(update, context):
+    """Handle hike selection"""
+    context.chat_data['last_state'] = HIKE_CHOICE
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    # Ignore clicks on info rows and separators
+    if query.data == 'ignore':
+        return HIKE_CHOICE
+        
+    if query.data.startswith('info_hike'):
+        # For clicks on date, show info message
+        hike_idx = int(query.data.split('_')[1].replace('hike', ''))
+        hike = context.user_data['available_hikes'][hike_idx]
+        available_spots = hike['max_participants'] - hike['current_participants']
+        
+        if available_spots > 0:
+            query.answer(
+                f"Click on the hike name below to select/deselect",
+                show_alert=False
+            )
+        else:
+            query.answer(
+                "This hike is fully booked",
+                show_alert=True
+            )
+        return HIKE_CHOICE
+        
+    if query.data.startswith('select_hike'):
+        hike_idx = int(query.data.replace('select_hike', ''))
+        selected_hikes = context.user_data.get('selected_hikes', [])
+        available_hikes = context.user_data['available_hikes']
+        
+        # Check if spots are still available
+        hike = available_hikes[hike_idx]
+        available_spots = hike['max_participants'] - hike['current_participants']
+        
+        if available_spots <= 0:
+            query.answer("This hike is fully booked", show_alert=True)
+            return HIKE_CHOICE
+            
+        if hike_idx in selected_hikes:
+            selected_hikes.remove(hike_idx)
+            query.answer("Hike deselected")
+        else:
+            selected_hikes.append(hike_idx)
+            query.answer("Hike selected")
+            
+        context.user_data['selected_hikes'] = selected_hikes
+        
+        # Update keyboard with new selections
+        reply_markup = KeyboardBuilder.create_hikes_selection_keyboard(
+            available_hikes, 
+            selected_hikes
+        )
+        query.edit_message_reply_markup(reply_markup=reply_markup)
+        return HIKE_CHOICE
+        
+    elif query.data == 'confirm_hikes':
+        selected_hikes = context.user_data.get('selected_hikes', [])
+        if not selected_hikes:
+            query.answer("❗ Please select at least one hike!", show_alert=True)
+            return HIKE_CHOICE
+            
+        # Store selected hikes details
+        available_hikes = context.user_data['available_hikes']
+        context.user_data['selected_hikes_details'] = [
+            available_hikes[idx] for idx in selected_hikes
+        ]
+        
+        # Next question
+        keyboard = [
+            [
+                InlineKeyboardButton("Yes ✅", callback_data='yes_eq'),
+                InlineKeyboardButton("No ❌", callback_data='no_eq')
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="🎒 Do you have all the necessary equipment?\n"
+                 "_You can find the required equipment on the hike webpage.\n"
+                 "Remember, you could be excluded on the day of the event if you do not "
+                 "meet the required equipment standards._",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        return EQUIPMENT
+        
+    return HIKE_CHOICE
+
+def handle_equipment(update, context):
+    """Handle equipment question response"""
+    context.chat_data['last_state'] = EQUIPMENT
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    context.user_data['has_equipment'] = True if query.data == 'yes_eq' else False
+    
+    reply_markup = KeyboardBuilder.create_car_share_keyboard()
+    
+    context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="🚗 Do you have a car you can share?\n"
+             "_Don't worry, we will share tolls and fuel. Let us know seats number "
+             "in the notes section at the bottom of the form._",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return CAR_SHARE
+
+def handle_car_share(update, context):
+    """Handle car sharing question response"""
+    context.chat_data['last_state'] = CAR_SHARE
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    context.user_data['car_sharing'] = True if query.data == 'yes_car' else False
+    
+    # Start location selection process
+    reply_markup = KeyboardBuilder.create_location_keyboard()
+    
+    context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="📍 Where do you live?\n"
+             "_This information helps us organize transport and meeting points_",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return LOCATION_CHOICE
+
+def handle_location_choice(update, context):
+    """Handle location choice response"""
+    query = update.callback_query
+    query.answer()
+    
+    if query.data == 'outside_rome':
+        query.edit_message_text(
+            "🌍 Please specify your location (e.g., Frascati, Tivoli, etc.):"
+        )
+        return CUSTOM_QUARTIERE
+        
+    # Create keyboard for municipi
+    reply_markup = KeyboardBuilder.create_municipi_keyboard(municipi_data.keys())
+    
+    query.edit_message_text(
+        "🏛 Select your municipio:",
+        reply_markup=reply_markup
+    )
+    return QUARTIERE_CHOICE
+
+def handle_quartiere_choice(update, context):
+    """Handle municipio selection"""
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    municipio = query.data.replace('mun_', '')
+    context.user_data['selected_municipio'] = municipio
+    
+    quartieri = municipi_data[municipio]
+    reply_markup = KeyboardBuilder.create_quartiere_keyboard(quartieri)
+    
+    query.edit_message_text(
+        f"🏘 Select your area in Municipio {municipio}:",
+        reply_markup=reply_markup
+    )
+    return FINAL_LOCATION
+
+def handle_final_location(update, context):
+    """Handle quartiere selection"""
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    if query.data == 'back_municipi':
+        return handle_location_choice(update, context)
+        
+    if query.data == 'other_area':
+        query.edit_message_text("📍 Please specify your area in this municipio:")
+        return CUSTOM_QUARTIERE
+        
+    quartiere = query.data.replace('q_', '')
+    municipio = context.user_data['selected_municipio']
+    location = f"Municipio {municipio} - {quartiere}"
+    context.user_data['location'] = location
+    
+    return handle_reminder_preferences(update, context)
+
+def handle_custom_location(update, context):
+    """Handle custom location input"""
+    context.chat_data['last_state'] = CUSTOM_QUARTIERE
+    
+    if 'selected_municipio' in context.user_data:
+        # Custom area in a municipio
+        municipio = context.user_data['selected_municipio']
+        location = f"Municipio {municipio} - {update.message.text}"
+    else:
+        # Location outside Rome
+        location = f"Outside Rome - {update.message.text}"
+        
+    context.user_data['location'] = location
+    
+    # Create and send reminder panel
+    reply_markup = KeyboardBuilder.create_reminder_keyboard()
+    
+    update.message.reply_text(
+        "⏰ Would you like to receive reminders before the hike?\n"
+        "_Choose your preferred reminder option:_",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return REMINDER_CHOICE
+
+def handle_reminder_preferences(update, context):
+    """Send reminder preference selection"""
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    reply_markup = KeyboardBuilder.create_reminder_keyboard()
+    
+    context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="⏰ Would you like to receive reminders before the hike?\n"
+             "_Choose your preferred reminder option:_",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return REMINDER_CHOICE
+
+def save_reminder_preference(update, context):
+    """Handle reminder preference selection"""
+    context.chat_data['last_state'] = REMINDER_CHOICE
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    reminder_choice = query.data.replace('reminder_', '')
+    reminder_mapping = {
+        '5': '5 days',
+        '2': '2 days',
+        'both': '5 and 2 days',
+        'none': 'No reminders'
+    }
+    context.user_data['reminder_preference'] = reminder_mapping[reminder_choice]
+    
+    context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="📝 Something important we need to know?\n"
+             "_Whatever you want to tell us. If you share the car, remember the number of available seats._",
+        parse_mode='Markdown'
+    )
+    return NOTES
+
+def save_notes(update, context):
+    """Save additional notes from user"""
+    context.chat_data['last_state'] = NOTES
+    context.user_data['notes'] = update.message.text
+    
+    reply_markup = KeyboardBuilder.create_final_notes_keyboard()
+    
+    update.message.reply_text(
+        "⚠️ *IMPORTANT NOTES*\n"
+        "Please note that you may be excluded from the event if all available spots are taken.\n"
+        "Additionally, you could be excluded on the day of the event if you do not meet the required equipment standards.\n"
+        "It's essential to ensure you have all necessary gear to participate in the hike safely.\n"
+        "For any information, please contact us at hikingsrome@gmail.com",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return IMPORTANT_NOTES
+
+def handle_final_choice(update, context):
+    """Handle final confirmation of registration"""
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    if query.data == 'accept':
+        # Check if selected hikes are still available
+        selected_hikes = context.user_data.get('selected_hikes_details', [])
+        user_id = query.from_user.id
+        
+        # Validate and save each hike registration
+        success_count = 0
+        error_messages = []
+        
+        for hike in selected_hikes:
+            # Prepare registration data
+            registration_data = {
+                'name_surname': context.user_data.get('name_surname', ''),
+                'email': context.user_data.get('email', ''),
+                'phone': context.user_data.get('phone', ''),
+                'birth_date': context.user_data.get('birth_date', ''),
+                'medical_conditions': context.user_data.get('medical_conditions', ''),
+                'has_equipment': context.user_data.get('has_equipment', False),
+                'car_sharing': context.user_data.get('car_sharing', False),
+                'location': context.user_data.get('location', ''),
+                'notes': context.user_data.get('notes', ''),
+                'reminder_preference': context.user_data.get('reminder_preference', 'No reminders')
+            }
+            
+            # Add registration to database
+            result = DBUtils.add_registration(user_id, hike['id'], registration_data)
+            
+            if result['success']:
+                success_count += 1
+            else:
+                error_messages.append(f"Hike '{hike['hike_name']}': {result['error']}")
+        
+        # Display results
+        if success_count == len(selected_hikes):
+            query.edit_message_text(
+                "✅ Thanks for signing up for the hike(s).\n"
+                "You can use /menu to go back to the home menu."
+            )
+        elif success_count > 0:
+            # Some registrations succeeded, some failed
+            query.edit_message_text(
+                f"✅ {success_count} out of {len(selected_hikes)} registrations were successful.\n\n"
+                f"The following errors occurred:\n"
+                f"{', '.join(error_messages)}\n\n"
+                f"You can use /menu to go back to the home menu."
+            )
+        else:
+            # All registrations failed
+            query.edit_message_text(
+                f"❌ Registration failed for all selected hikes.\n\n"
+                f"Errors:\n"
+                f"{', '.join(error_messages)}\n\n"
+                f"You can use /menu to go back to the home menu."
+            )
+    else:
+        query.edit_message_text(
+            "❌ We are sorry but accepting these rules is necessary to participate in the walks.\n"
+            "Thank you for your time.\n"
+            "You can use /menu to go back to the home menu."
+        )
+        
+    return ConversationHandler.END
+
+def cancel(update, context):
+    """Handle /cancel command"""
+    context.user_data.clear()
+    update.message.reply_text(
+        '❌ Operation cancelled.\n'
+        'You can use /menu to go back to the home menu.'
+    )
+    return ConversationHandler.END
+
+def handle_invalid_message(update, context):
+    """Handle invalid or unexpected messages"""
+    if not check_user_membership(update, context):
+        return handle_non_member(update, context)
+        
+    # States where the user is not filling out a form
+    non_form_states = [None, CHOOSING, PRIVACY_CONSENT, IMPORTANT_NOTES, ADMIN_MENU]
+    
+    if context.chat_data.get('last_state') in non_form_states:
+        update.message.reply_text(
+            "⚠️ If you need to access the menu, use the /menu command."
+        )
+        return ConversationHandler.END
+    else:
+        reply_markup = KeyboardBuilder.create_yes_no_keyboard('restart_yes', 'restart_no')
+        update.message.reply_text(
+            "❓ Do you want to start a new form?",
+            reply_markup=reply_markup
+        )
+        return context.chat_data.get('last_state')
+
+def handle_restart_choice(update, context):
+    """Handle choice to restart or continue"""
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    if query.data == 'restart_yes':
+        context.user_data.clear()
+        query.message.reply_text("👋 Name and surname?")
+        return NAME
+    else:
+        query.edit_message_text(
+            "ℹ️ If you need help, send a message in the telegram group or send an email to hikingsrome@gmail.com"
+        )
+        return ConversationHandler.END
+
+def check_and_send_reminders(context):
+    """Check for reminders to send"""
+    try:
+        # Check for reminders 5 days before hike
+        reminders_5_days = DBUtils.get_users_for_reminder(5)
+        for reminder in reminders_5_days:
+            send_reminder(context, reminder, 5)
+            
+        # Check for reminders 2 days before hike
+        reminders_2_days = DBUtils.get_users_for_reminder(2)
+        for reminder in reminders_2_days:
+            send_reminder(context, reminder, 2)
+            
+    except Exception as e:
+        logger.error(f"Error checking reminders: {e}")
+
+def send_reminder(context, reminder_data, days_before):
+    """Send a reminder to a specific user"""
+    try:
+        weather_api = os.environ.get('OPENWEATHER_API_KEY')
+        telegram_id = reminder_data['telegram_id']
+        hike_name = reminder_data['hike_name']
+        
+        # Format date for display
+        if isinstance(reminder_data['hike_date'], str):
+            hike_date = datetime.strptime(reminder_data['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+        else:
+            hike_date = reminder_data['hike_date'].strftime('%d/%m/%Y')
+        
+        # Get weather forecast if API key is available
+        weather_msg = ""
+        if weather_api and reminder_data.get('latitude') and reminder_data.get('longitude'):
+            weather = WeatherUtils.get_weather_forecast(
+                reminder_data['latitude'],
+                reminder_data['longitude'],
+                reminder_data['hike_date'],
+                weather_api
+            )
+            
+            if weather:
+                weather_msg = WeatherUtils.format_weather_message(weather, days_before)
+                
+        # Build and send reminder message
+        message = (
+            f"⏰ *Reminder*: You have an upcoming hike!\n\n"
+            f"🗓 *Date:* {hike_date}\n"
+            f"🏃 *Hike:* {hike_name}\n\n"
+            f"{weather_msg}\n\n"
+            f"_Remember to check the required equipment and be prepared!_"
+        )
+        
+        context.bot.send_message(
+            chat_id=telegram_id,
+            text=message,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error sending reminder: {e}")
+
+def cleanup(updater=None):
+    """Cleanup function to be called on exit"""
+    try:
+        if updater:
+            updater.stop()
+            logger.info("Bot stopped")
+    except:
+        pass
+
+def main():
+    """Main function to run the bot"""
+    # Load environment variables
+    TOKEN = os.environ.get('TELEGRAM_TOKEN')
+    if not TOKEN:
+        logger.error("No TELEGRAM_TOKEN provided in environment variables")
+        sys.exit(1)
+        
+    # Setup request parameters
+    request_kwargs = {
+        'read_timeout': 6,
+        'connect_timeout': 7,
+    }
+    
+    # Create updater and dispatcher
+    updater = Updater(
+        TOKEN,
+        use_context=True,
+        request_kwargs=request_kwargs
+    )
+    
+    # Register cleanup function
+    atexit.register(lambda: cleanup(updater))
+    
+    dp = updater.dispatcher
+    
+    # Setup rate limiter
+    rate_limiter = RateLimiter(max_requests=5, time_window=60)  # 5 requests per minute
+    dp.bot_data['rate_limiter'] = rate_limiter
+    
+    # Create conversation handler
+    conv_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler('menu', menu),
+            CommandHandler('start', menu),
+            CommandHandler('restart', restart),
+            CommandHandler('admin', cmd_admin),
+            CallbackQueryHandler(handle_restart_choice, pattern='^restart_'),
+            CommandHandler('privacy', cmd_privacy),
+            CommandHandler('bug', cmd_bug)
+        ],
+        states={
+            CHOOSING: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CommandHandler('admin', cmd_admin),
+                CallbackQueryHandler(handle_menu_choice, pattern='^(signup|myhikes|links|back_to_menu|admin_menu)),
+                CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)),
+                CallbackQueryHandler(handle_cancel_request, pattern='^cancel_hike_\\d+),
+                CallbackQueryHandler(handle_cancel_confirmation, pattern='^(confirm_cancel|abort_cancel)),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart))
+            ],
+            ADMIN_MENU: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CommandHandler('admin', cmd_admin),
+                CallbackQueryHandler(handle_admin_choice, pattern='^admin_'),
+                CallbackQueryHandler(handle_admin_choice, pattern='^confirm_cancel_hike_'),
+                CallbackQueryHandler(menu, pattern='^back_to_menu)
+            ],
+            ADMIN_HIKE_NAME: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, admin_save_hike_name)
+            ],
+            ADMIN_HIKE_DATE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, admin_save_hike_date)
+            ],
+            ADMIN_HIKE_MAX_PARTICIPANTS: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, admin_save_max_participants)
+            ],
+            ADMIN_HIKE_LOCATION: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, admin_save_location)
+            ],
+            ADMIN_HIKE_DIFFICULTY: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(admin_save_difficulty, pattern='^difficulty_')
+            ],
+            ADMIN_HIKE_DESCRIPTION: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, admin_save_description)
+            ],
+            ADMIN_CONFIRM_HIKE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(admin_confirm_hike, pattern='^(confirm_create_hike|cancel_create_hike))
+            ],
+            ADMIN_ADD_ADMIN: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, add_admin_handler)
+            ],
+            PRIVACY_CONSENT: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CommandHandler('privacy', cmd_privacy),
+                CallbackQueryHandler(handle_privacy_choices, pattern='^privacy_'),
+                CallbackQueryHandler(handle_menu_choice, pattern='^back_to_menu)
+            ],
+            NAME: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                MessageHandler(Filters.text & ~Filters.command, save_name)
+            ],
+            EMAIL: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                MessageHandler(Filters.text & ~Filters.command, save_email)
+            ],
+            PHONE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                MessageHandler(Filters.text & ~Filters.command, save_phone)
+            ],
+            BIRTH_DATE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                CallbackQueryHandler(handle_calendar)
+            ],
+            MEDICAL: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                MessageHandler(Filters.text & ~Filters.command, save_medical)
+            ],
+            HIKE_CHOICE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                CallbackQueryHandler(handle_hike)
+            ],
+            EQUIPMENT: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                CallbackQueryHandler(handle_equipment)
+            ],
+            CAR_SHARE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                CallbackQueryHandler(handle_car_share)
+            ],
+            LOCATION_CHOICE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                CallbackQueryHandler(handle_location_choice)
+            ],
+            QUARTIERE_CHOICE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                CallbackQueryHandler(handle_quartiere_choice)
+            ],
+            FINAL_LOCATION: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                CallbackQueryHandler(handle_final_location)
+            ],
+            CUSTOM_QUARTIERE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                MessageHandler(Filters.text & ~Filters.command, handle_custom_location)
+            ],
+            REMINDER_CHOICE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                CallbackQueryHandler(save_reminder_preference, pattern='^reminder_')
+            ],
+            NOTES: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                MessageHandler(Filters.text & ~Filters.command, save_notes)
+            ],
+            IMPORTANT_NOTES: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)),
+                CallbackQueryHandler(handle_final_choice)
+            ]
+        },
+        fallbacks=[
+            CommandHandler('cancel', cancel),
+            CommandHandler('restart', restart),
+            MessageHandler(Filters.text & ~Filters.command, handle_invalid_message)
+        ],
+        allow_reentry=True
+    )
+    
+    # Add job scheduler for reminders
+    job_queue = updater.job_queue
+    job_queue.run_daily(
+        callback=check_and_send_reminders,
+        time=datetime_time(hour=9, minute=0, tzinfo=rome_tz)  # Send reminders at 9:00 Rome time
+    )
+    
+    # Register handlers
+    dp.add_handler(conv_handler)
+    dp.add_handler(CallbackQueryHandler(menu, pattern='^back_to_menu))
+    dp.add_error_handler(error_handler)
+    
+    # Start the bot
+    try:
+        updater.start_polling(
+            drop_pending_updates=True,
+            timeout=30,
+            poll_interval=1.0,
+            allowed_updates=['message', 'callback_query']
+        )
+        logger.info("Bot started! Press CTRL+C to stop.")
+        updater.idle()
+    except Exception as e:
+        logger.error(f"Error starting bot: {e}")
+        try:
+            # Try to restart polling in case of error
+            time.sleep(5)
+            updater.start_polling(
+                drop_pending_updates=True,
+                timeout=15,
+                poll_interval=0.5,
+                allowed_updates=['message', 'callback_query']
+            )
+            logger.info("Bot restarted after error!")
+            updater.idle()
+        except Exception as e:
+            logger.error(f"Fatal error starting bot: {e}")
+            raise
+
+if __name__ == '__main__':
+    main()
