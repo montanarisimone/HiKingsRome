@@ -468,11 +468,84 @@ def handle_admin_choice(update, context):
         # Implement view participants functionality
         hike_id = int(query.data.replace('admin_participants_', ''))
         
-        # This would be implemented in a new function to fetch and display participants
-        # For now, we'll just return to admin menu
-        query.edit_message_text(
-            "Feature coming soon! Check back later."
-        )
+        # Get hike details
+        hikes = context.user_data.get('admin_hikes', [])
+        selected_hike = next((h for h in hikes if h['id'] == hike_id), None)
+        
+        if not selected_hike:
+            query.edit_message_text(
+                "Hike not found. Please try again."
+            )
+            return ADMIN_MENU
+        
+        # Get participants
+        participants = DBUtils.get_hike_participants(hike_id)
+        
+        if not participants:
+            query.edit_message_text(
+                f"No participants registered for hike: {selected_hike['hike_name']}\n\n"
+                f"Use /admin to go back to the admin menu."
+            )
+            return ADMIN_MENU
+        
+        # Format date for display
+        hike_date = datetime.strptime(selected_hike['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+        
+        # Create message with participants info
+        message = f"🏔️ *{selected_hike['hike_name']}* - {hike_date}\n"
+        message += f"👥 *Participants: {len(participants)}/{selected_hike['max_participants']}*\n\n"
+        
+        for i, p in enumerate(participants, 1):
+            car_sharing = "✅" if p.get('car_sharing') else "❌"
+            message += f"*{i}. {p['name_surname']}*\n"
+            message += f"📱 {p['phone']} | 📧 {p['email']}\n"
+            message += f"📍 {p['location']} | 🚗 Car share: {car_sharing}\n"
+            
+            if p.get('notes'):
+                message += f"📝 Notes: {p['notes']}\n"
+            
+            # Add separator between participants
+            if i < len(participants):
+                message += "\n" + "—" * 10 + "\n\n"
+        
+        # Create back button
+        keyboard = [[InlineKeyboardButton("🔙 Back to hike options", callback_data=f'admin_hike_{hike_id}')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        try:
+            query.edit_message_text(
+                message,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        except telegram.error.BadRequest as e:
+            # Handle case where message is too long
+            if "Message is too long" in str(e):
+                # Split the message if it's too long
+                chunks = [message[i:i+4000] for i in range(0, len(message), 4000)]
+                
+                # Send first chunk with edit_message_text
+                query.edit_message_text(
+                    chunks[0] + "\n\n_(continued in next message...)_",
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+                
+                # Send remaining chunks as new messages
+                for chunk in chunks[1:]:
+                    context.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text=chunk,
+                        parse_mode='Markdown'
+                    )
+            else:
+                # For other errors, send as plain text
+                query.edit_message_text(
+                    "Participants list (formatting removed due to length):\n\n" + 
+                    message.replace('*', ''),
+                    reply_markup=reply_markup
+                )
+        
         return ADMIN_MENU
     
     elif query.data.startswith('admin_cancel_'):
