@@ -532,3 +532,34 @@ class DBUtils:
         except sqlite3.Error as e:
             conn.close()
             return {"success": False, "error": str(e)}
+
+    @staticmethod
+    def get_hike_participants(hike_id):
+        """Get all participants for a specific hike"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+        SELECT 
+            r.id as registration_id,
+            r.telegram_id,
+            r.name_surname,
+            r.email,
+            r.phone,
+            r.birth_date,
+            r.medical_conditions,
+            r.has_equipment,
+            r.car_sharing,
+            r.location,
+            r.notes,
+            r.reminder_preference,
+            r.registration_timestamp
+        FROM registrations r
+        WHERE r.hike_id = ?
+        ORDER BY r.registration_timestamp ASC
+        """, (hike_id,))
+        
+        participants = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return participants
