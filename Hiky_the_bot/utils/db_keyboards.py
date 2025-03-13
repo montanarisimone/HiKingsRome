@@ -234,13 +234,27 @@ class KeyboardBuilder:
         """Create keyboard for admin to manage hikes"""
         keyboard = []
         
-        for hike in hikes:
+        # First add active hikes
+        active_hikes = [h for h in hikes if h.get('is_active') == 1]
+        for hike in active_hikes:
             hike_date = datetime.strptime(hike['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
             spots_left = hike['max_participants'] - hike['current_participants']
             
             keyboard.append([
                 InlineKeyboardButton(
-                    f"{hike_date} - {hike['hike_name']} ({spots_left} spots left)",
+                    f"🟢 {hike_date} - {hike['hike_name']} ({spots_left} spots left)",
+                    callback_data=f"admin_hike_{hike['id']}"
+                )
+            ])
+        
+        # Then add inactive/cancelled hikes
+        inactive_hikes = [h for h in hikes if h.get('is_active') == 0]
+        for hike in inactive_hikes:
+            hike_date = datetime.strptime(hike['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+            
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"🔴 {hike_date} - {hike['hike_name']} (cancelled)",
                     callback_data=f"admin_hike_{hike['id']}"
                 )
             ])
@@ -252,11 +266,19 @@ class KeyboardBuilder:
     def create_admin_hike_options_keyboard(hike_id):
         """Create keyboard for admin options for a specific hike"""
         keyboard = [
-            [InlineKeyboardButton("✏️ Edit details", callback_data=f'admin_edit_{hike_id}')],
-            [InlineKeyboardButton("👥 View participants", callback_data=f'admin_participants_{hike_id}')],
-            [InlineKeyboardButton("❌ Cancel hike", callback_data=f'admin_cancel_{hike_id}')],
-            [InlineKeyboardButton("🔙 Back to hikes", callback_data='admin_manage_hikes')]
+            [InlineKeyboardButton("👥 View participants", callback_data=f'admin_participants_{hike_id}')]
         ]
+        
+        # Show edit and cancel options only for active hikes
+        if is_active:
+            keyboard.insert(0, [InlineKeyboardButton("✏️ Edit details", callback_data=f'admin_edit_{hike_id}')])
+            keyboard.append([InlineKeyboardButton("❌ Cancel hike", callback_data=f'admin_cancel_{hike_id}')])
+        else:
+            # For cancelled hikes, maybe add a reactivate option
+            keyboard.append([InlineKeyboardButton("🔄 Reactivate hike", callback_data=f'admin_reactivate_{hike_id}')])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Back to hikes", callback_data='admin_manage_hikes')])
+        
         return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
