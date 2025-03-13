@@ -137,16 +137,23 @@ class DBUtils:
         return result is not None
     
     @staticmethod
-    def get_available_hikes(telegram_id=None):
+    def get_available_hikes(telegram_id=None, include_inactive=False):
         """Get available upcoming hikes"""
         conn = DBUtils.get_connection()
         cursor = conn.cursor()
         
         today = date.today()
-        min_date = today + timedelta(days=2)  # At least 2 days from today
         max_date = today + timedelta(days=60)  # Within 60 days
         
-        # Base query to get active hikes within date range
+        # Calculate min_date based on context
+        if include_inactive:
+            # For admin view, show hikes starting from today
+            min_date = today
+        else:
+            # For regular users, keep 2 day buffer
+            min_date = today + timedelta(days=2)
+        
+        # Base query to get hikes within date range
         query = """
         SELECT 
             h.id, 
@@ -157,12 +164,16 @@ class DBUtils:
             h.longitude,
             h.difficulty,
             h.description,
+            h.is_active,
             (SELECT COUNT(*) FROM registrations r WHERE r.hike_id = h.id) as current_participants
         FROM hikes h
         WHERE 
-            h.is_active = 1 AND
             h.hike_date BETWEEN ? AND ?
         """
+        
+        # Add active filter unless specifically requested to include inactive
+        if not include_inactive:
+            query += " AND h.is_active = 1"
         
         # If telegram_id is provided, exclude hikes the user is already registered for
         params = [min_date, max_date]
@@ -563,3 +574,100 @@ class DBUtils:
         conn.close()
         
         return participants
+
+    @staticmethod
+    def cancel_hike(hike_id, admin_id):
+        """Cancel a hike by setting is_active to 0 (admin only)"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        # Check if admin
+        if not DBUtils.check_is_admin(admin_id):
+            conn.close()
+            return {"success": False, "error": "Admin privileges required"}
+        
+        try:
+            # Get registered users for notifications
+            cursor.execute("""
+            SELECT 
+                r.telegram_id,
+                h.hike_name,
+                h.hike_date
+            FROM registrations r
+            JOIN hikes h ON r.hike_id = h.id
+            WHERE h.id = ?
+            """, (hike_id,))
+            
+            registrations = [dict(row) for row in cursor.fetchall()]
+            
+            # Update hike status
+            cursor.execute("""
+            UPDATE hikes
+            SET is_active = 0
+            WHERE id = ?
+            """, (hike_id,))
+            
+            conn.commit()
+            conn.close()
+            
+            return {
+                "success": True, 
+                "registrations": registrations
+            }
+            
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    def reactivate_hike(hike_id, admin_id):
+        """Reactivate a cancelled hike by setting is_active to 1 (admin only)"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        # Check if admin
+        if not DBUtils.check_is_admin(admin_id):
+            conn.close()
+            return {"success": False, "error": "Admin privileges required"}
+        
+        try:
+            # Check if hike exists and is currently inactive
+            cursor.execute("""
+            SELECT id, hike_name, hike_date, is_active 
+            FROM hikes 
+            WHERE id = ?
+            """, (hike_id,))
+            
+            hike = cursor.fetchone()
+            if not hike:
+                conn.close()
+                return {"success": False, "error": "Hike not found"}
+                
+            if hike['is_active'] == 1:
+                conn.close()
+                return {"success": False, "error": "Hike is already active"}
+                
+            # Get hike details for return
+            hike_info = {
+                'hike_name': hike['hike_name'],
+                'hike_date': hike['hike_date']
+            }
+            
+            # Update hike status
+            cursor.execute("""
+            UPDATE hikes
+            SET is_active = 1
+            WHERE id = ?
+            """, (hike_id,))
+            
+            conn.commit()
+            conn.close()
+            
+            return {
+                "success": True, 
+                "hike_info": hike_info
+            }
+            
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
