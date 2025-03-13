@@ -363,21 +363,44 @@ def handle_admin_choice(update, context):
     
     elif query.data == 'admin_manage_hikes':
         # Get all active hikes
-        hikes = DBUtils.get_available_hikes()
-        
+        hikes = DBUtils.get_available_hikes(include_inactive=True)
+    
         if not hikes:
             query.edit_message_text(
-                "There are no active hikes at the moment.\n"
+                "There are no hikes at the moment.\n"
                 "Use /admin to go back to the admin menu."
             )
             return ADMIN_MENU
         
+        # Filter active and inactive hikes
+        active_hikes = [h for h in hikes if h['is_active'] == 1]
+        inactive_hikes = [h for h in hikes if h['is_active'] == 0]
+        
         context.user_data['admin_hikes'] = hikes
+        
+        # Create message with sections for active and inactive hikes
+        message = "📝 *Manage Hikes*\n\n"
+        
+        if active_hikes:
+            message += "*Active hikes:*\n"
+            for h in active_hikes:
+                hike_date = datetime.strptime(h['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+                spots_left = h['max_participants'] - h['current_participants']
+                message += f"• {hike_date} - {h['hike_name']} ({spots_left} spots left)\n"
+        else:
+            message += "*No active hikes*\n"
+        
+        if inactive_hikes:
+            message += "\n*Inactive/Cancelled hikes:*\n"
+            for h in inactive_hikes:
+                hike_date = datetime.strptime(h['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+                message += f"• {hike_date} - {h['hike_name']} (cancelled)\n"
+        
+        # Create keyboard for hike selection
         reply_markup = KeyboardBuilder.create_admin_hikes_keyboard(hikes)
         
         query.edit_message_text(
-            "📝 *Manage Hikes*\n\n"
-            "Select a hike to manage:",
+            message,
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
@@ -404,9 +427,7 @@ def handle_admin_choice(update, context):
     elif query.data.startswith('admin_hike_'):
         hike_id = int(query.data.replace('admin_hike_', ''))
         context.user_data['selected_admin_hike'] = hike_id
-        
-        reply_markup = KeyboardBuilder.create_admin_hike_options_keyboard(hike_id)
-        
+    
         # Find the hike details
         hikes = context.user_data.get('admin_hikes', [])
         selected_hike = next((h for h in hikes if h['id'] == hike_id), None)
@@ -417,11 +438,21 @@ def handle_admin_choice(update, context):
             )
             return ADMIN_MENU
         
+        # Check if hike is active
+        is_active = selected_hike.get('is_active', 1) == 1
+        
         hike_date = datetime.strptime(selected_hike['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+        
+        # Create appropriate keyboard based on active status
+        reply_markup = KeyboardBuilder.create_admin_hike_options_keyboard(hike_id, is_active)
+        
+        status_text = "Active" if is_active else "Cancelled"
+        status_emoji = "🟢" if is_active else "🔴"
         
         query.edit_message_text(
             f"🏔️ *{selected_hike['hike_name']}*\n\n"
             f"Date: {hike_date}\n"
+            f"Status: {status_emoji} {status_text}\n"
             f"Participants: {selected_hike['current_participants']}/{selected_hike['max_participants']}\n"
             f"Difficulty: {selected_hike.get('difficulty', 'Not set')}\n\n"
             f"What would you like to do with this hike?",
@@ -549,11 +580,117 @@ def handle_admin_choice(update, context):
         )
         return ADMIN_MENU
     
+    elif query.data.startswith('admin_reactivate_'):
+        hike_id = int(query.data.replace('admin_reactivate_', ''))
+        
+        # For confirmation, show dialog
+        keyboard = [
+            [
+                InlineKeyboardButton("Yes, Reactivate", callback_data=f'confirm_reactivate_hike_{hike_id}'),
+                InlineKeyboardButton("No, Keep Cancelled", callback_data=f'admin_hike_{hike_id}')
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        query.edit_message_text(
+            "🔄 *Reactivate Hike*\n\n"
+            "Are you sure you want to reactivate this cancelled hike?\n\n"
+            "This will make the hike visible again to users.",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        return ADMIN_MENU
+    
+    elif query.data.startswith('confirm_reactivate_hike_'):
+        # Process hike reactivation
+        hike_id = int(query.data.replace('confirm_reactivate_hike_', ''))
+        user_id = query.from_user.id
+        
+        # Reactivate the hike in the database
+        result = DBUtils.reactivate_hike(hike_id, user_id)
+        
+        if result['success']:
+            hike_info = result.get('hike_info', {})
+            hike_name = hike_info.get('hike_name', 'Unknown hike')
+            
+            if 'hike_date' in hike_info:
+                hike_date = datetime.strptime(hike_info['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+            else:
+                hike_date = 'Unknown date'
+            
+            query.edit_message_text(
+                f"✅ Hike '{hike_name}' on {hike_date} has been reactivated successfully.\n\n"
+                f"It is now visible to users again."
+            )
+        else:
+            query.edit_message_text(
+                f"❌ Failed to reactivate hike: {result.get('error', 'Unknown error')}."
+            )
+        
+        # Return to admin menu after a short delay
+        context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="Returning to admin menu...",
+            reply_markup=KeyboardBuilder.create_admin_keyboard()
+        )
+        return ADMIN_MENU
+    
     elif query.data.startswith('confirm_cancel_hike_'):
         # Implement confirmed hike cancellation
-        # This would need to update the database and send notifications
-        query.edit_message_text(
-            "Feature coming soon! Check back later."
+        hike_id = int(query.data.replace('confirm_cancel_hike_', ''))
+        user_id = query.from_user.id
+        
+        # Cancel the hike in the database
+        result = DBUtils.cancel_hike(hike_id, user_id)
+        
+        if result['success']:
+            # Get hike details
+            hikes = context.user_data.get('admin_hikes', [])
+            selected_hike = next((h for h in hikes if h['id'] == hike_id), None)
+            
+            if selected_hike:
+                hike_name = selected_hike['hike_name']
+                hike_date = datetime.strptime(selected_hike['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+                
+                # Send notification to registered participants if any
+                registrations = result.get('registrations', [])
+                notification_count = 0
+                
+                for reg in registrations:
+                    try:
+                        context.bot.send_message(
+                            chat_id=reg['telegram_id'],
+                            text=(
+                                f"⚠️ *Important Notification*\n\n"
+                                f"We're sorry to inform you that the following hike has been cancelled:\n\n"
+                                f"🏔️ *{hike_name}*\n"
+                                f"📅 *Date:* {hike_date}\n\n"
+                                f"If you have any questions, please contact the organizers or email hikingsrome@gmail.com."
+                            ),
+                            parse_mode='Markdown'
+                        )
+                        notification_count += 1
+                    except Exception as e:
+                        logger.error(f"Failed to notify user {reg['telegram_id']}: {e}")
+                
+                query.edit_message_text(
+                    f"✅ Hike '{hike_name}' on {hike_date} has been cancelled successfully.\n\n"
+                    f"Notifications sent to {notification_count} out of {len(registrations)} registered participants."
+                )
+            else:
+                query.edit_message_text(
+                    "✅ Hike has been cancelled successfully."
+                )
+        else:
+            query.edit_message_text(
+                f"❌ Failed to cancel hike: {result.get('error', 'Unknown error')}."
+            )
+        
+        # Return to admin menu after a short delay
+        context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="Returning to admin menu...",
+            reply_markup=KeyboardBuilder.create_admin_keyboard()
         )
         return ADMIN_MENU
     
