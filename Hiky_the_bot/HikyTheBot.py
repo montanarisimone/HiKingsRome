@@ -382,28 +382,6 @@ def handle_admin_choice(update, context):
             reply_markup=reply_markup
         )
         return ADMIN_MENU
-    
-    elif query.data == 'admin_view_participants':
-        # Get all active hikes
-        hikes = DBUtils.get_available_hikes()
-        
-        if not hikes:
-            query.edit_message_text(
-                "There are no active hikes at the moment.\n"
-                "Use /admin to go back to the admin menu."
-            )
-            return ADMIN_MENU
-        
-        context.user_data['admin_hikes'] = hikes
-        reply_markup = KeyboardBuilder.create_admin_hikes_keyboard(hikes)
-        
-        query.edit_message_text(
-            "👥 *View Participants*\n\n"
-            "Select a hike to view participants:",
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
-        return ADMIN_MENU
 
     elif query.data == 'back_to_admin':
         reply_markup = KeyboardBuilder.create_admin_keyboard()
