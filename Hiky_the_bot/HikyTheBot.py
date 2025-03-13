@@ -404,6 +404,17 @@ def handle_admin_choice(update, context):
             reply_markup=reply_markup
         )
         return ADMIN_MENU
+
+    elif query.data == 'back_to_admin':
+        reply_markup = KeyboardBuilder.create_admin_keyboard()
+        
+        query.edit_message_text(
+            "👑 *Admin Menu*\n\n"
+            "What would you like to manage?",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        return ADMIN_MENU
     
     elif query.data == 'admin_add_admin':
         query.edit_message_text(
@@ -2003,6 +2014,7 @@ def main():
                 CommandHandler('admin', cmd_admin),
                 CallbackQueryHandler(handle_admin_choice, pattern='^admin_'),
                 CallbackQueryHandler(handle_admin_choice, pattern='^confirm_cancel_hike_'),
+                CallbackQueryHandler(handle_admin_choice, pattern='^back_to_admin$'),
                 CallbackQueryHandler(menu, pattern='^back_to_menu$')
             ],
             ADMIN_HIKE_NAME: [
