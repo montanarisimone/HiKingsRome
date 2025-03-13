@@ -263,7 +263,7 @@ class KeyboardBuilder:
         return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
-    def create_admin_hike_options_keyboard(hike_id):
+    def create_admin_hike_options_keyboard(hike_id, is_active=True):
         """Create keyboard for admin options for a specific hike"""
         keyboard = [
             [InlineKeyboardButton("👥 View participants", callback_data=f'admin_participants_{hike_id}')]
