@@ -18,7 +18,6 @@ class KeyboardBuilder:
         keyboard = [
             [InlineKeyboardButton("Create new hike 🏔️", callback_data='admin_create_hike')],
             [InlineKeyboardButton("Manage existing hikes 📝", callback_data='admin_manage_hikes')],
-            [InlineKeyboardButton("View participants 👥", callback_data='admin_view_participants')],
             [InlineKeyboardButton("Add admin 👑", callback_data='admin_add_admin')],
             [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
         ]
