@@ -246,7 +246,7 @@ class KeyboardBuilder:
                 )
             ])
         
-        keyboard.append([InlineKeyboardButton("🔙 Back to admin menu", callback_data='admin_menu')])
+        keyboard.append([InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')])
         return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
