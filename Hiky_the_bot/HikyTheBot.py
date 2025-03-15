@@ -2274,7 +2274,7 @@ def main():
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CommandHandler('admin', cmd_admin),
-                CallbackQueryHandler(handle_menu_choice, pattern='^(signup|myhikes|links|back_to_menu|admin_menu)$'),
+                CallbackQueryHandler(handle_menu_choice, pattern='^(signup|myhikes|calendar|links|back_to_menu|admin_menu)$'),
                 CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)$'),
                 CallbackQueryHandler(handle_cancel_request, pattern='^cancel_hike_\\d+$'),
                 CallbackQueryHandler(handle_cancel_confirmation, pattern='^(confirm_cancel|abort_cancel)$'),
