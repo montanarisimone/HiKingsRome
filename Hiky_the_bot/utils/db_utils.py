@@ -177,7 +177,7 @@ class DBUtils:
         
         # If telegram_id is provided and we don't want to include registered hikes, exclude hikes the user is already registered for
         params = [min_date, max_date]
-        if telegram_id and not include_registered::
+        if telegram_id and not include_registered:
             query += """
             AND h.id NOT IN (
                 SELECT hike_id FROM registrations 
