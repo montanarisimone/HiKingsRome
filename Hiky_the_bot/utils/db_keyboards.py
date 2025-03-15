@@ -8,6 +8,7 @@ class KeyboardBuilder:
         keyboard = [
             [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
             [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
+            [InlineKeyboardButton("Hike Calendar 📅", callback_data='calendar')],
             [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
         ]
         return InlineKeyboardMarkup(keyboard)
