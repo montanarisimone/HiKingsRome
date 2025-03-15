@@ -1414,7 +1414,7 @@ def show_hike_calendar(update, context):
     
     # Get all available hikes, including those the user is already registered for
     # and show them in a calendar view
-    hikes = DBUtils.get_available_hikes(include_inactive=False)
+    hikes = DBUtils.get_available_hikes(include_inactive=False, include_registered=True)
     
     if not hikes:
         message = "There are no upcoming hikes in the calendar.\nUse /menu to go back to the home menu."
