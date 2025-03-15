@@ -137,7 +137,7 @@ class DBUtils:
         return result is not None
     
     @staticmethod
-    def get_available_hikes(telegram_id=None, include_inactive=False):
+    def get_available_hikes(telegram_id=None, include_inactive=False, include_registered=False):
         """Get available upcoming hikes"""
         conn = DBUtils.get_connection()
         cursor = conn.cursor()
@@ -175,9 +175,9 @@ class DBUtils:
         if not include_inactive:
             query += " AND h.is_active = 1"
         
-        # If telegram_id is provided, exclude hikes the user is already registered for
+        # If telegram_id is provided and we don't want to include registered hikes, exclude hikes the user is already registered for
         params = [min_date, max_date]
-        if telegram_id:
+        if telegram_id and not include_registered::
             query += """
             AND h.id NOT IN (
                 SELECT hike_id FROM registrations 
