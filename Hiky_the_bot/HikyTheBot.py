@@ -231,6 +231,7 @@ def menu(update, context):
     keyboard = [
         [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
         [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
+        [InlineKeyboardButton("Hike Calendar 📅", callback_data='calendar')],
         [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
     ]
     
@@ -301,6 +302,9 @@ def handle_menu_choice(update, context):
     
     elif query.data == 'myhikes':
         return show_my_hikes(query, context)
+
+    elif query.data == 'calendar':
+        return show_hike_calendar(query, context)
     
     elif query.data == 'links':
         reply_markup = KeyboardBuilder.create_links_keyboard()
@@ -1397,6 +1401,86 @@ def handle_cancel_request(update, context):
         f"🏃 {hike['hike_name']}?",
         reply_markup=reply_markup
     )
+    return CHOOSING
+
+def show_hike_calendar(update, context):
+    """Show upcoming hikes in a calendar view"""
+    if isinstance(update, CallbackQuery):
+        query = update
+        user_id = query.from_user.id
+    else:
+        user_id = update.message.from_user.id
+        query = None
+    
+    # Get all available hikes, including those the user is already registered for
+    # and show them in a calendar view
+    hikes = DBUtils.get_available_hikes(include_inactive=False)
+    
+    if not hikes:
+        message = "There are no upcoming hikes in the calendar.\nUse /menu to go back to the home menu."
+        if query:
+            query.edit_message_text(message)
+        else:
+            update.message.reply_text(message)
+        return CHOOSING
+    
+    # Group hikes by month
+    hikes_by_month = {}
+    for hike in hikes:
+        hike_date = datetime.strptime(hike['hike_date'], '%Y-%m-%d')
+        month_key = hike_date.strftime('%B %Y')  # "January 2023"
+        
+        if month_key not in hikes_by_month:
+            hikes_by_month[month_key] = []
+        
+        hikes_by_month[month_key].append(hike)
+    
+    # Format the calendar message
+    calendar_message = "📅 *Upcoming Hikes Calendar*\n\n"
+    
+    for month, month_hikes in sorted(hikes_by_month.items(), key=lambda x: datetime.strptime(x[0], '%B %Y')):
+        calendar_message += f"*{month}*\n"
+        
+        # Sort hikes by date within the month
+        month_hikes.sort(key=lambda x: x['hike_date'])
+        
+        for hike in month_hikes:
+            hike_date = datetime.strptime(hike['hike_date'], '%Y-%m-%d')
+            day_name = hike_date.strftime('%A')  # Get day name (Monday, Tuesday, etc.)
+            date_str = hike_date.strftime('%d/%m')  # Format as day/month
+            
+            # Check if spots are available
+            spots_left = hike['max_participants'] - hike['current_participants']
+            if spots_left > 0:
+                status = f"🟢 {spots_left} spots left"
+            else:
+                status = "⚫ Fully booked"
+            
+            # Add difficulty if available
+            difficulty = f" - {hike['difficulty']}" if hike.get('difficulty') else ""
+            
+            calendar_message += f"• {day_name} {date_str}: {hike['hike_name']}{difficulty} ({status})\n"
+        
+        calendar_message += "\n"
+    
+    # Add back button
+    keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Send the message
+    if query:
+        query.edit_message_text(
+            text=calendar_message,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    else:
+        update.message.reply_text(
+            text=calendar_message,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    
     return CHOOSING
 
 def handle_cancel_confirmation(update, context):
