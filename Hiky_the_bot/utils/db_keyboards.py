@@ -272,7 +272,6 @@ class KeyboardBuilder:
         
         # Show edit and cancel options only for active hikes
         if is_active:
-            keyboard.insert(0, [InlineKeyboardButton("✏️ Edit details", callback_data=f'admin_edit_{hike_id}')])
             keyboard.append([InlineKeyboardButton("❌ Cancel hike", callback_data=f'admin_cancel_{hike_id}')])
         else:
             # For cancelled hikes, maybe add a reactivate option
