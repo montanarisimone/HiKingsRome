@@ -228,11 +228,13 @@ def menu(update, context):
         f"So, how can I help you?"
     )
     
-    # Add admin button if user is admin
-    reply_markup = KeyboardBuilder.create_menu_keyboard()
+    # Get the base keyboard
+    keyboard = KeyboardBuilder.create_menu_keyboard().inline_keyboard
     
     if is_admin:
-        reply_markup.inline_keyboard.append([InlineKeyboardButton("Admin Menu 🛠️", callback_data='admin_menu')])
+        keyboard.append([InlineKeyboardButton("Admin Menu 🛠️", callback_data='admin_menu')])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
         
     if update.callback_query:
         update.callback_query.edit_message_text(welcome_message, reply_markup=reply_markup)
@@ -325,7 +327,17 @@ def handle_menu_choice(update, context):
     if not check_user_membership(update, context):
         return handle_non_member(update, context)
     
-    if query.data == 'signup':
+    if query.data == 'manage_hikes':
+        reply_markup = KeyboardBuilder.create_manage_hikes_keyboard()
+        query.edit_message_text(
+            "🏔️ *Hike Management*\n\n"
+            "What would you like to do?",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        return CHOOSING
+    
+    elif query.data == 'signup':
         # Check hike availability before starting questionnaire
         available_hikes = DBUtils.get_available_hikes(query.from_user.id)
         
@@ -2428,7 +2440,7 @@ def main():
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CommandHandler('admin', cmd_admin),
-                CallbackQueryHandler(handle_menu_choice, pattern='^(signup|myhikes|calendar|links|donation|back_to_menu|admin_menu)$'),
+                CallbackQueryHandler(handle_menu_choice, pattern='^(manage_hikes|signup|myhikes|calendar|links|donation|back_to_menu|admin_menu)$'),
                 CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)$'),
                 CallbackQueryHandler(handle_cancel_request, pattern='^cancel_hike_\\d+$'),
                 CallbackQueryHandler(handle_cancel_confirmation, pattern='^(confirm_cancel|abort_cancel)$'),
@@ -2603,11 +2615,17 @@ def main():
     )
     
     # Register handlers
+    # adds the main conversation manager
     dp.add_handler(conv_handler)
+    # This handler catches the ‘back_to_menu’ callback which is not intercepted by the conversation handler
     dp.add_handler(CallbackQueryHandler(menu, pattern='^back_to_menu$'))
+    # This is the error handler
     dp.add_error_handler(error_handler)
+    # This handles the checkout stages of payment
     dp.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+    # This handles successfully completed payments
     dp.add_handler(MessageHandler(Filters.successful_payment, successful_payment_callback))
+    # This is the test command for payments with Telegram Stars
     dp.add_handler(CommandHandler('test_stars', test_telegram_stars))
     
     # Start the bot
