@@ -6,11 +6,20 @@ class KeyboardBuilder:
     def create_menu_keyboard():
         """Create the main menu keyboard"""
         keyboard = [
+            [InlineKeyboardButton("Manage Hikes 🏔️", callback_data='manage_hikes')],
+            [InlineKeyboardButton("Useful links 🔗", callback_data='links')],
+            [InlineKeyboardButton("Make Donation 💖", callback_data='donation')]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def create_manage_hikes_keyboard():
+        """Create the hikes management submenu keyboard"""
+        keyboard = [
             [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
             [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
             [InlineKeyboardButton("Hike Calendar 📅", callback_data='calendar')],
-            [InlineKeyboardButton("Useful links 🔗", callback_data='links')],
-            [InlineKeyboardButton("Make Donation 💖", callback_data='donation')]
+            [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
         ]
         return InlineKeyboardMarkup(keyboard)
     
