@@ -498,13 +498,12 @@ class DBUtils:
         WHERE 
             h.hike_date = ? AND
             (
-                r.reminder_preference LIKE ? OR
-                r.reminder_preference LIKE ?
+                r.reminder_preference = ? OR
+                r.reminder_preference = '5 and 2 days'
             )
         """, (
             reminder_date,
-            f"%{days_before} days%",
-            "%both%"
+            f"%{days_before} days%"
         ))
         
         reminders = [dict(row) for row in cursor.fetchall()]
