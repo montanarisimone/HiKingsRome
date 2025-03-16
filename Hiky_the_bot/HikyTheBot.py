@@ -352,39 +352,46 @@ def handle_donation(update, context):
         raise
     
     if query.data == 'donation_stars':
-        # Define donation amounts with your requested values
-        donation_options = [
-            LabeledPrice('Small Support ☕', 299),   # $2.99
-            LabeledPrice('Regular Support 🍕', 499),  # $4.99
-            LabeledPrice('Generous Support 🏔️', 999),  # $9.99
-            LabeledPrice('Super Support 🌟', 1999)   # $19.99
-        ]
-        
-        # Send invoice
-        context.bot.send_invoice(
-            chat_id=query.message.chat_id,
-            title="Support Hikings Rome",
-            description="Your donation helps us organize better hikes and maintain our community!",
-            payload="donation_payload",  # Unique identifier
-            provider_token="",  # Empty string for Telegram Stars
-            currency="USD",
-            prices=donation_options,
-            photo_url="https://www.hikingsrome.com/wp-content/uploads/logo-hiking-rome-250.png",
-            photo_width=250,
-            photo_height=250,
-            need_name=True,
-            need_email=False,
-            need_phone_number=False,
-            need_shipping_address=False,
-            is_flexible=False
-        )
-        
-        query.edit_message_text(
-            "I've sent you the donation options! "
-            "Thank you for supporting Hikings Rome! 🙏"
-        )
-        
-        return CHOOSING
+        try:
+            # Define donation amounts with your requested values
+            donation_options = [
+                LabeledPrice('Small Support ☕', 299),   # $2.99
+                LabeledPrice('Regular Support 🍕', 499),  # $4.99
+                LabeledPrice('Generous Support 🏔️', 999),  # $9.99
+                LabeledPrice('Super Support 🌟', 1999)   # $19.99
+            ]
+            
+            # Send invoice with more logging and error handling
+            logger.info("Attempting to send invoice...")
+            
+            # Send invoice with minimal required parameters to debug
+            context.bot.send_invoice(
+                chat_id=query.message.chat_id,
+                title="Support Hikings Rome",
+                description="Your donation helps us organize better hikes and maintain our community!",
+                payload="donation_payload",
+                provider_token="",  # Empty string for Telegram Stars
+                currency="USD",
+                prices=donation_options
+            )
+            
+            logger.info("Invoice sent successfully")
+            
+            query.edit_message_text(
+                "I've sent you the donation options! "
+                "Thank you for supporting Hikings Rome! 🙏"
+            )
+            
+            return CHOOSING
+            
+        except Exception as e:
+            # Log the specific error
+            logger.error(f"Error sending invoice: {e}")
+            query.edit_message_text(
+                "Sorry, there was an error processing your donation request. "
+                "Please try again later or use PayPal instead."
+            )
+            return CHOOSING
     
     return CHOOSING
 
