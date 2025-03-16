@@ -40,6 +40,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+logger.info(f"Using python-telegram-bot version: {telegram.__version__}")
 
 # Define conversation states
 (CHOOSING, NAME, EMAIL, PHONE, BIRTH_DATE, MEDICAL, HIKE_CHOICE, EQUIPMENT,
@@ -260,6 +261,53 @@ def cmd_admin(update, context):
         reply_markup=reply_markup
     )
     return ADMIN_MENU
+
+def check_telegram_stars_availability(bot):
+    """Check if Telegram Stars are available for this bot"""
+    try:
+        # Get bot info to check properties
+        bot_info = bot.get_me()
+        logger.info(f"Bot info: {bot_info}")
+        
+        # Log bot properties that might affect Stars functionality
+        logger.info(f"Bot username: {bot_info.username}")
+        logger.info(f"Bot can_join_groups: {bot_info.can_join_groups}")
+        logger.info(f"Bot can_read_all_group_messages: {bot_info.can_read_all_group_messages}")
+        logger.info(f"Bot supports_inline_queries: {bot_info.supports_inline_queries}")
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error checking bot properties: {e}")
+        return False
+
+def test_telegram_stars(update, context):
+    """Test function for Telegram Stars donation"""
+    try:
+        # Create a minimal test invoice
+        prices = [LabeledPrice('Test Donation', 100)]  # $1.00
+        
+        # Send the minimal test invoice
+        context.bot.send_invoice(
+            chat_id=update.effective_chat.id,
+            title="Test Donation",
+            description="This is a test donation.",
+            payload="test_payload",
+            provider_token="",  # Empty for Telegram Stars
+            currency="USD",
+            prices=prices,
+            # Make sure to include all required parameters
+            need_name=False,
+            need_phone_number=False,
+            need_email=False,
+            need_shipping_address=False,
+            is_flexible=False
+        )
+        
+        return True
+    except Exception as e:
+        logger.error(f"Test Telegram Stars error: {e}")
+        update.message.reply_text(f"Error testing Telegram Stars: {str(e)}")
+        return False
 
 def handle_menu_choice(update, context):
     """Handle menu choice selections"""
@@ -2359,7 +2407,7 @@ def main():
     atexit.register(lambda: cleanup(updater))
     
     dp = updater.dispatcher
-    
+    check_telegram_stars_availability(updater.bot)
     # Setup rate limiter
     rate_limiter = RateLimiter(max_requests=5, time_window=60)  # 5 requests per minute
     dp.bot_data['rate_limiter'] = rate_limiter
@@ -2560,6 +2608,7 @@ def main():
     dp.add_error_handler(error_handler)
     dp.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     dp.add_handler(MessageHandler(Filters.successful_payment, successful_payment_callback))
+    dp.add_handler(CommandHandler('test_stars', test_telegram_stars))
     
     # Start the bot
     try:
