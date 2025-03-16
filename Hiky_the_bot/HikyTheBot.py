@@ -2458,6 +2458,7 @@ def main():
                 CommandHandler('admin', cmd_admin),
                 CallbackQueryHandler(handle_admin_choice, pattern='^admin_'),
                 CallbackQueryHandler(handle_admin_choice, pattern='^confirm_cancel_hike_'),
+                CallbackQueryHandler(handle_admin_choice, pattern='^confirm_reactivate_hike_'),
                 CallbackQueryHandler(handle_admin_choice, pattern='^back_to_admin$'),
                 CallbackQueryHandler(menu, pattern='^back_to_menu$')
             ],
