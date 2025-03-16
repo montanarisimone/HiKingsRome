@@ -228,18 +228,11 @@ def menu(update, context):
     )
     
     # Add admin button if user is admin
-    keyboard = [
-        [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
-        [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
-        [InlineKeyboardButton("Hike Calendar 📅", callback_data='calendar')],
-        [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
-    ]
+    reply_markup = KeyboardBuilder.create_menu_keyboard()
     
     if is_admin:
-        keyboard.append([InlineKeyboardButton("Admin Menu 🛠️", callback_data='admin_menu')])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
+        reply_markup.inline_keyboard.append([InlineKeyboardButton("Admin Menu 🛠️", callback_data='admin_menu')])
+        
     if update.callback_query:
         update.callback_query.edit_message_text(welcome_message, reply_markup=reply_markup)
     else:
