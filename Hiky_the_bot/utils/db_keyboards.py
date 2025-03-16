@@ -9,7 +9,8 @@ class KeyboardBuilder:
             [InlineKeyboardButton("Sign up for hike 🏃", callback_data='signup')],
             [InlineKeyboardButton("My Hikes 🎒", callback_data='myhikes')],
             [InlineKeyboardButton("Hike Calendar 📅", callback_data='calendar')],
-            [InlineKeyboardButton("Useful links 🔗", callback_data='links')]
+            [InlineKeyboardButton("Useful links 🔗", callback_data='links')],
+            [InlineKeyboardButton("Make Donation 💖", callback_data='donation')]
         ]
         return InlineKeyboardMarkup(keyboard)
     
@@ -49,6 +50,15 @@ class KeyboardBuilder:
             [InlineKeyboardButton("📸 Instagram", url="https://www.instagram.com/hikingsrome/")],
             [InlineKeyboardButton("💬 Telegram Group", url="https://t.me/+dku6thBDTGM0MWZk")],
             [InlineKeyboardButton("🗺 Komoot", url="https://www.komoot.com/it-it/user/3261856743261")],
+            [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def create_donation_keyboard():
+        """Create the donation options keyboard"""
+        keyboard = [
+            [InlineKeyboardButton("✨ Telegram Stars", callback_data='donation_stars')],
             [InlineKeyboardButton("💲 PayPal", url="https://paypal.me/hikingsrome?country.x=IT&locale.x=it_IT")],
             [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
         ]
