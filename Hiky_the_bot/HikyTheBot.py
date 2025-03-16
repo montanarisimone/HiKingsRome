@@ -19,7 +19,7 @@ from calendar import monthcalendar, month_name
 
 # Telegram imports
 import telegram
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, LabeledPrice
 from telegram.ext import (
     Updater, CommandHandler, MessageHandler, CallbackQueryHandler,
     ConversationHandler, Filters
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
  ELSEWHERE, NOTES, IMPORTANT_NOTES, REMINDER_CHOICE, PRIVACY_CONSENT, 
  ADMIN_MENU, ADMIN_CREATE_HIKE, ADMIN_HIKE_NAME, ADMIN_HIKE_DATE, 
  ADMIN_HIKE_MAX_PARTICIPANTS, ADMIN_HIKE_LOCATION, ADMIN_HIKE_DIFFICULTY,
- ADMIN_HIKE_DESCRIPTION, ADMIN_CONFIRM_HIKE, ADMIN_ADD_ADMIN) = range(28)
+ ADMIN_HIKE_DESCRIPTION, ADMIN_CONFIRM_HIKE, ADMIN_ADD_ADMIN, DONATION) = range(29)
 
 # Define timezone for Rome (for consistent timestamps)
 rome_tz = pytz.timezone('Europe/Rome')
@@ -314,6 +314,15 @@ def handle_menu_choice(update, context):
             reply_markup=reply_markup
         )
         return CHOOSING
+
+    elif query.data == 'donation':
+        reply_markup = KeyboardBuilder.create_donation_keyboard()
+        query.edit_message_text(
+            "Thank you for considering supporting our hiking community! 💖\n\n"
+            "Choose your preferred donation method:",
+            reply_markup=reply_markup
+        )
+        return DONATION
     
     elif query.data == 'back_to_menu':
         return menu(update, context)
@@ -336,6 +345,103 @@ def handle_menu_choice(update, context):
             reply_markup=reply_markup
         )
         return ADMIN_MENU
+
+def handle_donation(update, context):
+    """Handle donation choices"""
+    query = update.callback_query
+    logger.info(f"Donation choice: {query.data} by user {query.from_user.id}")
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+    
+    if query.data == 'donation_stars':
+        # Define donation amounts with your requested values
+        donation_options = [
+            LabeledPrice('Small Support ☕', 299),   # $2.99
+            LabeledPrice('Regular Support 🍕', 499),  # $4.99
+            LabeledPrice('Generous Support 🏔️', 999),  # $9.99
+            LabeledPrice('Super Support 🌟', 1999)   # $19.99
+        ]
+        
+        # Send invoice
+        context.bot.send_invoice(
+            chat_id=query.message.chat_id,
+            title="Support Hikings Rome",
+            description="Your donation helps us organize better hikes and maintain our community!",
+            payload="donation_payload",  # Unique identifier
+            provider_token="",  # Empty string for Telegram Stars
+            currency="USD",
+            prices=donation_options,
+            photo_url="https://www.hikingsrome.com/wp-content/uploads/logo-hiking-rome-250.png",
+            photo_width=250,
+            photo_height=250,
+            need_name=True,
+            need_email=False,
+            need_phone_number=False,
+            need_shipping_address=False,
+            is_flexible=False
+        )
+        
+        query.edit_message_text(
+            "I've sent you the donation options! "
+            "Thank you for supporting Hikings Rome! 🙏"
+        )
+        
+        return CHOOSING
+    
+    return CHOOSING
+
+def precheckout_callback(update, context):
+    """Handle pre-checkout"""
+    query = update.pre_checkout_query
+    
+    # Always accept
+    query.answer(ok=True)
+
+def successful_payment_callback(update, context):
+    """Handle successful payment"""
+    payment = update.message.successful_payment
+    amount = payment.total_amount / 100  # Convert to dollars
+    
+    update.message.reply_text(
+        f"Thank you for your donation of ${amount:.2f}! 💖\n\n"
+        f"Your support helps us organize better hikes and maintain our community. "
+        f"We appreciate your contribution to Hikings Rome!"
+    )
+    
+    # Get the donor information
+    donor_name = update.effective_user.first_name
+    donor_username = update.effective_user.username or 'no username'
+    donor_id = update.effective_user.id
+    
+    # Create notification message
+    notification = (
+        f"💰 New donation received!\n"
+        f"Amount: ${amount:.2f}\n"
+        f"From: {donor_name} (@{donor_username})\n"
+        f"User ID: {donor_id}"
+    )
+    
+    # Notify all admin users
+    try:
+        # Get all admin users from database
+        admin_users = DBUtils.get_all_admins()
+        
+        for admin in admin_users:
+            try:
+                context.bot.send_message(
+                    chat_id=admin['telegram_id'],
+                    text=notification
+                )
+                logger.info(f"Donation notification sent to admin {admin['telegram_id']}")
+            except Exception as e:
+                logger.error(f"Failed to notify admin {admin['telegram_id']}: {e}")
+    except Exception as e:
+        logger.error(f"Failed to get admin list: {e}")
 
 def handle_admin_choice(update, context):
     """Handle admin menu choices"""
@@ -2280,6 +2386,12 @@ def main():
                 CallbackQueryHandler(handle_cancel_confirmation, pattern='^(confirm_cancel|abort_cancel)$'),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$')
             ],
+            DONATION: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_donation, pattern='^donation_'),
+                CallbackQueryHandler(menu, pattern='^back_to_menu$')
+            ],
             ADMIN_MENU: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
@@ -2446,6 +2558,8 @@ def main():
     dp.add_handler(conv_handler)
     dp.add_handler(CallbackQueryHandler(menu, pattern='^back_to_menu$'))
     dp.add_error_handler(error_handler)
+    dp.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+    dp.add_handler(MessageHandler(Filters.successful_payment, successful_payment_callback))
     
     # Start the bot
     try:
