@@ -22,7 +22,7 @@ import telegram
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, LabeledPrice
 from telegram.ext import (
     Updater, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ConversationHandler, Filters
+    ConversationHandler, Filters, PreCheckoutQueryHandler
 )
 
 # Local imports
