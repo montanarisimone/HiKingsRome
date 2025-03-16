@@ -438,6 +438,22 @@ class DBUtils:
         except sqlite3.Error:
             conn.close()
             return False
+
+    @staticmethod
+    def get_all_admins():
+        """Get a list of all admin users"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+        SELECT telegram_id, role
+        FROM admins
+        """)
+        
+        admins = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return admins
     
     @staticmethod
     def remove_group_member(telegram_id):
