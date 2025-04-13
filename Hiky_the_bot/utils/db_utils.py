@@ -341,17 +341,19 @@ class DBUtils:
                 hike_name,
                 hike_date,
                 max_participants,
+                guides,
                 latitude,
                 longitude,
                 difficulty,
                 description,
                 created_by,
                 is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
             """, (
                 hike_data.get('hike_name', ''),
                 hike_data.get('hike_date', ''),
                 hike_data.get('max_participants', 0),
+                hike_data.get('guides', 0),
                 hike_data.get('latitude'),
                 hike_data.get('longitude'),
                 hike_data.get('difficulty', ''),
