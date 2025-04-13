@@ -43,6 +43,7 @@ def setup_database():
         hike_name TEXT NOT NULL,
         hike_date DATE NOT NULL,
         max_participants INTEGER NOT NULL,
+        guides INTEGER DEFAULT 1,
         latitude REAL,
         longitude REAL,
         difficulty TEXT,
