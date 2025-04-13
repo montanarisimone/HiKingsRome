@@ -48,7 +48,7 @@ logger.info(f"Using python-telegram-bot version: {telegram.__version__}")
  ELSEWHERE, NOTES, IMPORTANT_NOTES, REMINDER_CHOICE, PRIVACY_CONSENT, 
  ADMIN_MENU, ADMIN_CREATE_HIKE, ADMIN_HIKE_NAME, ADMIN_HIKE_DATE, 
  ADMIN_HIKE_MAX_PARTICIPANTS, ADMIN_HIKE_LOCATION, ADMIN_HIKE_DIFFICULTY,
- ADMIN_HIKE_DESCRIPTION, ADMIN_CONFIRM_HIKE, ADMIN_ADD_ADMIN, DONATION) = range(29)
+ ADMIN_HIKE_DESCRIPTION, ADMIN_CONFIRM_HIKE, ADMIN_ADD_ADMIN, DONATION, ADMIN_HIKE_GUIDES) = range(30)
 
 # Define timezone for Rome (for consistent timestamps)
 rome_tz = pytz.timezone('Europe/Rome')
@@ -950,9 +950,33 @@ def admin_save_hike_date(update, context):
         )
         return ADMIN_HIKE_DATE
     
+    # Ask for number of guides
+    update.message.reply_text(
+        "👥 Quante sono le guide?"
+    )
+    return ADMIN_HIKE_GUIDES
+
+def admin_save_guides(update, context):
+    """Save number of guides from admin input"""
+    context.chat_data['last_state'] = ADMIN_HIKE_GUIDES
+    
+    # Validate number
+    try:
+        num_guides = int(update.message.text)
+        if num_guides <= 0:
+            raise ValueError("Must be positive")
+            
+        context.user_data['guides'] = num_guides
+        
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Please enter a valid positive number:"
+        )
+        return ADMIN_HIKE_GUIDES
+    
     # Ask for maximum participants
     update.message.reply_text(
-        "👥 What's the maximum number of participants for this hike?"
+        "👥 Qual è il numero massimo di partecipanti (non considerare le guide)?"
     )
     return ADMIN_HIKE_MAX_PARTICIPANTS
 
@@ -1041,6 +1065,7 @@ def admin_save_description(update, context):
         f"🏔️ *New Hike Summary*\n\n"
         f"Name: {hike_data['hike_name']}\n"
         f"Date: {display_date}\n"
+        f"Guides: {hike_data['guides']}\n"
         f"Max Participants: {hike_data['max_participants']}\n"
         f"Location: {hike_data['latitude']}, {hike_data['longitude']}\n"
         f"Difficulty: {hike_data['difficulty']}\n\n"
@@ -1074,6 +1099,7 @@ def admin_confirm_hike(update, context):
             'hike_name': context.user_data.get('hike_name'),
             'hike_date': context.user_data.get('hike_date'),
             'max_participants': context.user_data.get('max_participants'),
+            'guides': context.user_data.get('guides', 0),
             'latitude': context.user_data.get('latitude'),
             'longitude': context.user_data.get('longitude'),
             'difficulty': context.user_data.get('difficulty'),
@@ -2471,6 +2497,11 @@ def main():
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 MessageHandler(Filters.text & ~Filters.command, admin_save_hike_date)
+            ],
+            ADMIN_HIKE_GUIDES: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, admin_save_guides)
             ],
             ADMIN_HIKE_MAX_PARTICIPANTS: [
                 CommandHandler('menu', menu),
