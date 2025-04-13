@@ -952,7 +952,7 @@ def admin_save_hike_date(update, context):
     
     # Ask for number of guides
     update.message.reply_text(
-        "👥 Quante sono le guide?"
+        "👥 How many guides?"
     )
     return ADMIN_HIKE_GUIDES
 
@@ -976,7 +976,7 @@ def admin_save_guides(update, context):
     
     # Ask for maximum participants
     update.message.reply_text(
-        "👥 Qual è il numero massimo di partecipanti (non considerare le guide)?"
+        "👥 What's the maximum number of participants for this hike (excluding guides)?"
     )
     return ADMIN_HIKE_MAX_PARTICIPANTS
 
