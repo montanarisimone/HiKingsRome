@@ -9,7 +9,7 @@ HiKingsRome is all about helping people escape the city, connect with nature, an
 🛠️ What’s in This Repository?  
 This repo is a mix of scripts, code, and general chaos (but the good kind). Here's what you'll find:
 
-- Google Sheets Automations ✨ [Deprecated]
+- Google Sheets Automations ✨ [Deprecated]  
 A collection of scripts to manage participant data, hike schedules, and all the logistics that keep HiKingsRome running.
 
 - Hiky the Bot 🤖  
