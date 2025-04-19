@@ -100,26 +100,92 @@ class DBUtils:
         now = datetime.now(rome_tz).strftime("%Y-%m-%d %H:%M:%S")
         
         try:
-            cursor.execute("""
-            UPDATE users 
-            SET 
-                name = ?,
-                surname = ?,
-                email = ?,
-                phone = ?,
-                birth_date = ?,
-                last_updated = ?
-            WHERE telegram_id = ?
-            """, (
-                profile_data.get('name', ''),
-                profile_data.get('surname', ''),
-                profile_data.get('email', ''),
-                profile_data.get('phone', ''),
-                profile_data.get('birth_date', ''),
-                now,
-                telegram_id
-            ))
+            # Check if required fields are provided when updating
+            if profile_data.get('name') is not None and not profile_data.get('name'):
+                conn.close()
+                return {"success": False, "error": "Name cannot be empty"}
+                
+            if profile_data.get('surname') is not None and not profile_data.get('surname'):
+                conn.close()
+                return {"success": False, "error": "Surname cannot be empty"}
+                
+            if profile_data.get('email') is not None and not profile_data.get('email'):
+                conn.close()
+                return {"success": False, "error": "Email cannot be empty"}
+                
+            if profile_data.get('phone') is not None and not profile_data.get('phone'):
+                conn.close()
+                return {"success": False, "error": "Phone cannot be empty"}
+                
+            if profile_data.get('birth_date') is not None and not profile_data.get('birth_date'):
+                conn.close()
+                return {"success": False, "error": "Birth date cannot be empty"}
             
+            # Get current profile data first
+            cursor.execute("""
+            SELECT name, surname, email, phone, birth_date 
+            FROM users 
+            WHERE telegram_id = ?
+            """, (telegram_id,))
+
+            current_data = cursor.fetchone()
+
+            # If there's no current data, we need to make sure all required fields are provided
+            if not current_data:
+                required_fields = ['name', 'surname', 'email', 'phone', 'birth_date']
+                for field in required_fields:
+                    if field not in profile_data or not profile_data[field]:
+                        # Skip incomplete profile updates
+                        if len(profile_data) < len(required_fields):
+                            # This is a partial update, which is ok during profile setup
+                            break
+                        conn.close()
+                        return {"success": False, "error": f"Required field '{field}' is missing"}
+            
+            # Update only the provided fields
+            update_fields = []
+            params = []
+            
+            # Only update fields that are provided
+            if 'name' in profile_data:
+                update_fields.append("name = ?")
+                params.append(profile_data['name'])
+                
+            if 'surname' in profile_data:
+                update_fields.append("surname = ?")
+                params.append(profile_data['surname'])
+                
+            if 'email' in profile_data:
+                update_fields.append("email = ?")
+                params.append(profile_data['email'])
+                
+            if 'phone' in profile_data:
+                update_fields.append("phone = ?")
+                params.append(profile_data['phone'])
+                
+            if 'birth_date' in profile_data:
+                update_fields.append("birth_date = ?")
+                params.append(profile_data['birth_date'])
+                
+            if not update_fields:
+                # Nothing to update
+                conn.close()
+                return {"success": True}
+                
+            # Add last_updated and telegram_id parameters
+            update_fields.append("last_updated = ?")
+            params.append(now)
+            params.append(telegram_id)
+            
+            # Create the SQL query
+            query = f"""
+            UPDATE users 
+            SET {', '.join(update_fields)}
+            WHERE telegram_id = ?
+            """
+            
+            cursor.execute(query, params)
+        
             conn.commit()
             conn.close()
             return {"success": True}
