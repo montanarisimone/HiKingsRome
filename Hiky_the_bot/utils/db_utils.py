@@ -984,7 +984,7 @@ class DBUtils:
             WHERE (maintenance_date > ?) OR
                   (maintenance_date = ? AND end_time > ?)
             """
-            cursor.execute(query, (today, today, now))
+            cursor.execute(query, (today_str, today_str, now_str))
         else:
             cursor.execute(query)
         
