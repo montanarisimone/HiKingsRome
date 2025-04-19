@@ -65,6 +65,99 @@ class DBUtils:
         return True
     
     @staticmethod
+    def get_user_profile(telegram_id):
+        """Get user profile information"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+        SELECT 
+            telegram_id,
+            username,
+            name,
+            surname,
+            email,
+            phone,
+            birth_date,
+            is_guide
+        FROM users 
+        WHERE telegram_id = ?
+        """, (telegram_id,))
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return dict(result)  # Convert to regular dictionary
+        return None
+    
+    @staticmethod
+    def update_user_profile(telegram_id, profile_data):
+        """Update user profile information"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now(rome_tz).strftime("%Y-%m-%d %H:%M:%S")
+        
+        try:
+            cursor.execute("""
+            UPDATE users 
+            SET 
+                name = ?,
+                surname = ?,
+                email = ?,
+                phone = ?,
+                birth_date = ?,
+                last_updated = ?
+            WHERE telegram_id = ?
+            """, (
+                profile_data.get('name', ''),
+                profile_data.get('surname', ''),
+                profile_data.get('email', ''),
+                profile_data.get('phone', ''),
+                profile_data.get('birth_date', ''),
+                now,
+                telegram_id
+            ))
+            
+            conn.commit()
+            conn.close()
+            return {"success": True}
+            
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def update_guide_status(telegram_id, is_guide):
+        """Update user's guide status (admin only)"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now(rome_tz).strftime("%Y-%m-%d %H:%M:%S")
+        
+        try:
+            cursor.execute("""
+            UPDATE users 
+            SET 
+                is_guide = ?,
+                last_updated = ?
+            WHERE telegram_id = ?
+            """, (
+                1 if is_guide else 0,
+                now,
+                telegram_id
+            ))
+            
+            conn.commit()
+            conn.close()
+            return {"success": True}
+            
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
     def get_privacy_settings(telegram_id):
         """Get privacy settings for a user"""
         conn = DBUtils.get_connection()
@@ -135,6 +228,30 @@ class DBUtils:
         conn.close()
         
         return result is not None
+    
+    @staticmethod
+    def sync_guide_status_with_admin():
+        """Sync guide status with admin status for all users"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        # Set is_guide=1 for all admins
+        cursor.execute("""
+        UPDATE users
+        SET is_guide = 1
+        WHERE telegram_id IN (SELECT telegram_id FROM admins)
+        """)
+        
+        # Set is_guide=0 for non-admins
+        cursor.execute("""
+        UPDATE users
+        SET is_guide = 0
+        WHERE telegram_id NOT IN (SELECT telegram_id FROM admins)
+        """)
+        
+        conn.commit()
+        conn.close()
+        return True
     
     @staticmethod
     def get_available_hikes(telegram_id=None, include_inactive=False, include_registered=False):
@@ -552,6 +669,13 @@ class DBUtils:
             INSERT INTO admins (telegram_id, role, added_by, added_on)
             VALUES (?, ?, ?, ?)
             """, (admin_id, role, added_by, now))
+            
+            # Also update guide status
+            cursor.execute("""
+            UPDATE users
+            SET is_guide = 1
+            WHERE telegram_id = ?
+            """, (admin_id,))
             
             conn.commit()
             conn.close()
