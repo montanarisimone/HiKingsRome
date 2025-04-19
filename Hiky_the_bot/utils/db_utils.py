@@ -961,7 +961,10 @@ class DBUtils:
         cursor = conn.cursor()
         
         today = date.today()
+        today_str = today.strftime('%Y-%m-%d')  # Convert date to string in ISO format
+    
         now = datetime.now().time()
+        now_str = now.strftime('%H:%M:%S')  # Convert time to string
         
         query = """
         SELECT 
