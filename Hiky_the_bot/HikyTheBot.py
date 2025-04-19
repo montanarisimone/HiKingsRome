@@ -49,7 +49,8 @@ logger.info(f"Using python-telegram-bot version: {telegram.__version__}")
  ADMIN_MENU, ADMIN_CREATE_HIKE, ADMIN_HIKE_NAME, ADMIN_HIKE_DATE, 
  ADMIN_HIKE_MAX_PARTICIPANTS, ADMIN_HIKE_LOCATION, ADMIN_HIKE_DIFFICULTY,
  ADMIN_HIKE_DESCRIPTION, ADMIN_CONFIRM_HIKE, ADMIN_ADD_ADMIN, DONATION, ADMIN_HIKE_GUIDES,
- PROFILE_MENU, PROFILE_EDIT, PROFILE_NAME, PROFILE_SURNAME, PROFILE_EMAIL,  PROFILE_PHONE, PROFILE_BIRTH_DATE) = range(37)
+ PROFILE_MENU, PROFILE_EDIT, PROFILE_NAME, PROFILE_SURNAME, PROFILE_EMAIL,  PROFILE_PHONE, PROFILE_BIRTH_DATE,
+ ADMIN_MAINTENANCE, MAINTENANCE_DATE, MAINTENANCE_START_TIME, MAINTENANCE_END_TIME, MAINTENANCE_REASON) = range(42)
 
 # Define timezone for Rome (for consistent timestamps)
 rome_tz = pytz.timezone('Europe/Rome')
@@ -732,6 +733,633 @@ def handle_save_profile(update, context):
 
 # End def to manage personal profile
 
+# Start def to manage maintenance
+
+def show_maintenance_menu(update, context):
+    """Show maintenance management menu"""
+    query = update.callback_query
+    query.answer()
+    
+    # Check if admin
+    user_id = query.from_user.id
+    if not DBUtils.check_is_admin(user_id):
+        query.edit_message_text("⚠️ You don't have admin privileges to use this menu.")
+        return CHOOSING
+    
+    # Get existing maintenance schedules
+    schedules = DBUtils.get_maintenance_schedules()
+    
+    # Create and send keyboard
+    reply_markup = KeyboardBuilder.create_maintenance_keyboard(schedules)
+    
+    query.edit_message_text(
+        "🔧 *Maintenance Schedule Management*\n\n"
+        "Here you can schedule maintenance windows to notify users when the bot might be unavailable.\n\n"
+        "Select an existing schedule to edit, or create a new one:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_MAINTENANCE
+
+def start_maintenance_creation(update, context):
+    """Start creating a new maintenance schedule"""
+    query = update.callback_query
+    query.answer()
+    
+    query.edit_message_text(
+        "📅 Please enter the date for scheduled maintenance (DD/MM/YYYY):"
+    )
+    return MAINTENANCE_DATE
+
+def save_maintenance_date(update, context):
+    """Save maintenance date"""
+    # Validate date format
+    date_str = update.message.text
+    try:
+        maintenance_date = datetime.strptime(date_str, '%d/%m/%Y')
+        
+        # Store in ISO format for database
+        context.user_data['maintenance_date'] = maintenance_date.strftime('%Y-%m-%d')
+        
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Invalid date format. Please enter the date as DD/MM/YYYY:"
+        )
+        return MAINTENANCE_DATE
+    
+    # Ask for start time
+    update.message.reply_text(
+        "⏰ Please enter the start time (HH:MM) in 24-hour format:"
+    )
+    return MAINTENANCE_START_TIME
+
+def save_maintenance_start_time(update, context):
+    """Save maintenance start time"""
+    # Validate time format
+    time_str = update.message.text
+    try:
+        start_time = datetime.strptime(time_str, '%H:%M').time()
+        context.user_data['maintenance_start'] = start_time.strftime('%H:%M:%S')
+        
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Invalid time format. Please enter the time as HH:MM (e.g., 14:30):"
+        )
+        return MAINTENANCE_START_TIME
+    
+    # Ask for end time
+    update.message.reply_text(
+        "⏰ Please enter the end time (HH:MM) in 24-hour format:"
+    )
+    return MAINTENANCE_END_TIME
+
+def save_maintenance_end_time(update, context):
+    """Save maintenance end time"""
+    # Validate time format
+    time_str = update.message.text
+    try:
+        end_time = datetime.strptime(time_str, '%H:%M').time()
+        
+        # Validate that end time is after start time
+        start_time_str = context.user_data.get('maintenance_start')
+        start_time = datetime.strptime(start_time_str, '%H:%M:%S').time()
+        
+        if end_time <= start_time:
+            update.message.reply_text(
+                "⚠️ End time must be after start time. Please enter a valid end time:"
+            )
+            return MAINTENANCE_END_TIME
+            
+        context.user_data['maintenance_end'] = end_time.strftime('%H:%M:%S')
+        
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Invalid time format. Please enter the time as HH:MM (e.g., 16:30):"
+        )
+        return MAINTENANCE_END_TIME
+    
+    # Ask for reason (optional)
+    update.message.reply_text(
+        "🗒 Please enter a reason for the maintenance (optional, press /skip to leave blank):"
+    )
+    return MAINTENANCE_REASON
+
+def skip_maintenance_reason(update, context):
+    """Skip providing a maintenance reason"""
+    context.user_data['maintenance_reason'] = None
+    return save_maintenance_schedule(update, context)
+
+def save_maintenance_reason(update, context):
+    """Save maintenance reason and complete schedule creation"""
+    context.user_data['maintenance_reason'] = update.message.text
+    return save_maintenance_schedule(update, context)
+
+def save_maintenance_schedule(update, context):
+    """Save the complete maintenance schedule to database"""
+    user_id = update.effective_user.id
+    
+    # Collect data from context
+    maintenance_data = {
+        'maintenance_date': context.user_data.get('maintenance_date'),
+        'start_time': context.user_data.get('maintenance_start'),
+        'end_time': context.user_data.get('maintenance_end'),
+        'reason': context.user_data.get('maintenance_reason')
+    }
+    
+    # Save to database
+    result = DBUtils.add_maintenance(
+        user_id,
+        maintenance_data['maintenance_date'],
+        maintenance_data['start_time'],
+        maintenance_data['end_time'],
+        maintenance_data['reason']
+    )
+    
+    if result['success']:
+        # Format date and times for display
+        display_date = datetime.strptime(maintenance_data['maintenance_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+        start_time = maintenance_data['start_time'].split('.')[0]
+        end_time = maintenance_data['end_time'].split('.')[0]
+        
+        message = (
+            f"✅ Maintenance schedule created successfully!\n\n"
+            f"📅 Date: {display_date}\n"
+            f"⏰ Time: {start_time} - {end_time}\n"
+        )
+        
+        if maintenance_data['reason']:
+            message += f"🗒 Reason: {maintenance_data['reason']}\n\n"
+            
+        message += "Users will be notified 2 hours before the maintenance starts."
+        
+        # Create back button
+        keyboard = [[InlineKeyboardButton("🔙 Back to maintenance menu", callback_data='admin_maintenance')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if isinstance(update, telegram.Update) and update.message:
+            update.message.reply_text(message, reply_markup=reply_markup)
+        else:
+            context.bot.send_message(
+                chat_id=user_id,
+                text=message,
+                reply_markup=reply_markup
+            )
+    else:
+        error_message = f"❌ Failed to create maintenance schedule: {result.get('error', 'Unknown error')}"
+        
+        # Create back button
+        keyboard = [[InlineKeyboardButton("🔙 Back to maintenance menu", callback_data='admin_maintenance')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if isinstance(update, telegram.Update) and update.message:
+            update.message.reply_text(error_message, reply_markup=reply_markup)
+        else:
+            context.bot.send_message(
+                chat_id=user_id,
+                text=error_message,
+                reply_markup=reply_markup
+            )
+    
+    return ADMIN_MAINTENANCE
+
+def handle_maintenance_selection(update, context):
+    """Handle selection of existing maintenance schedule"""
+    query = update.callback_query
+    query.answer()
+    
+    # Extract maintenance ID from callback
+    maintenance_id = int(query.data.replace('edit_maintenance_', ''))
+    context.user_data['editing_maintenance_id'] = maintenance_id
+    
+    # Get maintenance details
+    schedules = DBUtils.get_maintenance_schedules(include_past=True)
+    selected_schedule = next((s for s in schedules if s['id'] == maintenance_id), None)
+    
+    if not selected_schedule:
+        query.edit_message_text(
+            "⚠️ Maintenance schedule not found. It may have been deleted."
+        )
+        return show_maintenance_menu(update, context)
+    
+    # Format date and times for display
+    if isinstance(selected_schedule['maintenance_date'], str):
+        display_date = datetime.strptime(selected_schedule['maintenance_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+    else:
+        display_date = selected_schedule['maintenance_date'].strftime('%d/%m/%Y')
+        
+    start_time = selected_schedule['start_time']
+    if isinstance(start_time, str):
+        start_time = start_time.split('.')[0]
+        
+    end_time = selected_schedule['end_time']
+    if isinstance(end_time, str):
+        end_time = end_time.split('.')[0]
+    
+    # Create message
+    message = (
+        f"🔧 *Maintenance Schedule Details*\n\n"
+        f"📅 Date: {display_date}\n"
+        f"⏰ Time: {start_time} - {end_time}\n"
+    )
+    
+    if selected_schedule.get('reason'):
+        message += f"🗒 Reason: {selected_schedule['reason']}\n"
+    
+    # Add notification status
+    if selected_schedule.get('sent_notification'):
+        message += f"\n_✅ Notification has been sent to users_"
+    else:
+        message += f"\n_⏱ Notification will be sent 2 hours before maintenance_"
+    
+    # Create keyboard for actions
+    reply_markup = KeyboardBuilder.create_maintenance_actions_keyboard(maintenance_id)
+    
+    query.edit_message_text(
+        message,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_MAINTENANCE
+
+def handle_maintenance_action(update, context):
+    """Handle actions for a specific maintenance schedule"""
+    query = update.callback_query
+    query.answer()
+    
+    action = query.data.split('_')
+    maintenance_id = int(action[-1])
+    action_type = '_'.join(action[1:-1])  # edit_date, edit_time, edit_reason, delete
+    
+    context.user_data['editing_maintenance_id'] = maintenance_id
+    
+    if action_type == 'edit_date':
+        query.edit_message_text(
+            "📅 Please enter the new date for scheduled maintenance (DD/MM/YYYY):"
+        )
+        return MAINTENANCE_DATE
+        
+    elif action_type == 'edit_time':
+        query.edit_message_text(
+            "⏰ Please enter the new start time (HH:MM) in 24-hour format:"
+        )
+        return MAINTENANCE_START_TIME
+        
+    elif action_type == 'edit_reason':
+        query.edit_message_text(
+            "🗒 Please enter a new reason for the maintenance (or send /skip to clear):"
+        )
+        return MAINTENANCE_REASON
+        
+    elif action_type == 'delete':
+        # Confirm deletion
+        keyboard = [
+            [
+                InlineKeyboardButton("Yes, Delete ✅", callback_data=f'confirm_delete_maintenance_{maintenance_id}'),
+                InlineKeyboardButton("No, Cancel ❌", callback_data=f'edit_maintenance_{maintenance_id}')
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        query.edit_message_text(
+            "❓ Are you sure you want to delete this maintenance schedule?\n\n"
+            "This action cannot be undone.",
+            reply_markup=reply_markup
+        )
+        return ADMIN_MAINTENANCE
+    
+    return ADMIN_MAINTENANCE
+
+def delete_maintenance_schedule(update, context):
+    """Delete a maintenance schedule"""
+    query = update.callback_query
+    query.answer()
+    
+    maintenance_id = int(query.data.replace('confirm_delete_maintenance_', ''))
+    user_id = query.from_user.id
+    
+    # Delete from database
+    result = DBUtils.delete_maintenance(maintenance_id, user_id)
+    
+    if result['success']:
+        query.edit_message_text(
+            "✅ Maintenance schedule has been deleted successfully."
+        )
+    else:
+        query.edit_message_text(
+            f"❌ Failed to delete maintenance schedule: {result.get('error', 'Unknown error')}"
+        )
+    
+    # Return to maintenance menu
+    context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="Returning to maintenance menu...",
+        reply_markup=KeyboardBuilder.create_maintenance_keyboard(DBUtils.get_maintenance_schedules())
+    )
+    return ADMIN_MAINTENANCE
+
+def update_maintenance_date(update, context):
+    """Update date for existing maintenance"""
+    maintenance_id = context.user_data.get('editing_maintenance_id')
+    if not maintenance_id:
+        update.message.reply_text("❌ Error: Maintenance ID not found. Please try again.")
+        return show_maintenance_menu(update, context)
+    
+    # Validate date format
+    date_str = update.message.text
+    try:
+        maintenance_date = datetime.strptime(date_str, '%d/%m/%Y')
+        # Store in ISO format for database
+        date_iso = maintenance_date.strftime('%Y-%m-%d')
+        
+        # Update in database
+        result = DBUtils.update_maintenance(
+            maintenance_id, 
+            update.effective_user.id,
+            maintenance_date=date_iso
+        )
+        
+        if result['success']:
+            update.message.reply_text(f"✅ Maintenance date updated to {date_str}.")
+        else:
+            update.message.reply_text(f"❌ Failed to update: {result.get('error', 'Unknown error')}")
+            
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Invalid date format. Please enter the date as DD/MM/YYYY:"
+        )
+        return MAINTENANCE_DATE
+    
+    # Show maintenance menu again
+    reply_markup = KeyboardBuilder.create_maintenance_keyboard(DBUtils.get_maintenance_schedules())
+    update.message.reply_text(
+        "🔧 *Maintenance Schedule Management*\n\n"
+        "Select an existing schedule to edit, or create a new one:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_MAINTENANCE
+
+def update_maintenance_time(update, context):
+    """Update start time for existing maintenance and request end time"""
+    maintenance_id = context.user_data.get('editing_maintenance_id')
+    if not maintenance_id:
+        update.message.reply_text("❌ Error: Maintenance ID not found. Please try again.")
+        return show_maintenance_menu(update, context)
+    
+    # Validate time format
+    time_str = update.message.text
+    try:
+        start_time = datetime.strptime(time_str, '%H:%M').time()
+        start_iso = start_time.strftime('%H:%M:%S')
+        
+        # Store for later
+        context.user_data['new_maintenance_start'] = start_iso
+        
+        # Ask for end time
+        update.message.reply_text(
+            "⏰ Please enter the new end time (HH:MM) in 24-hour format:"
+        )
+        return MAINTENANCE_END_TIME
+        
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Invalid time format. Please enter the time as HH:MM (e.g., 14:30):"
+        )
+        return MAINTENANCE_START_TIME
+
+def update_maintenance_end_time(update, context):
+    """Update both start and end times for existing maintenance"""
+    maintenance_id = context.user_data.get('editing_maintenance_id')
+    if not maintenance_id:
+        update.message.reply_text("❌ Error: Maintenance ID not found. Please try again.")
+        return show_maintenance_menu(update, context)
+    
+    start_time = context.user_data.get('new_maintenance_start')
+    
+    # Validate time format
+    time_str = update.message.text
+    try:
+        end_time = datetime.strptime(time_str, '%H:%M').time()
+        
+        # Validate that end time is after start time
+        start_time_obj = datetime.strptime(start_time, '%H:%M:%S').time()
+        
+        if end_time <= start_time_obj:
+            update.message.reply_text(
+                "⚠️ End time must be after start time. Please enter a valid end time:"
+            )
+            return MAINTENANCE_END_TIME
+            
+        end_iso = end_time.strftime('%H:%M:%S')
+        
+        # Update in database
+        result = DBUtils.update_maintenance(
+            maintenance_id, 
+            update.effective_user.id,
+            start_time=start_time,
+            end_time=end_iso
+        )
+        
+        if result['success']:
+            start_display = start_time[:5]  # HH:MM
+            end_display = end_iso[:5]       # HH:MM
+            update.message.reply_text(f"✅ Maintenance time updated to {start_display} - {end_display}.")
+        else:
+            update.message.reply_text(f"❌ Failed to update: {result.get('error', 'Unknown error')}")
+            
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Invalid time format. Please enter the time as HH:MM (e.g., 16:30):"
+        )
+        return MAINTENANCE_END_TIME
+    
+    # Show maintenance menu again
+    reply_markup = KeyboardBuilder.create_maintenance_keyboard(DBUtils.get_maintenance_schedules())
+    update.message.reply_text(
+        "🔧 *Maintenance Schedule Management*\n\n"
+        "Select an existing schedule to edit, or create a new one:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_MAINTENANCE
+
+def update_maintenance_reason(update, context):
+    """Update reason for existing maintenance"""
+    maintenance_id = context.user_data.get('editing_maintenance_id')
+    if not maintenance_id:
+        update.message.reply_text("❌ Error: Maintenance ID not found. Please try again.")
+        return show_maintenance_menu(update, context)
+    
+    reason = update.message.text
+    
+    # Update in database
+    result = DBUtils.update_maintenance(
+        maintenance_id, 
+        update.effective_user.id,
+        reason=reason
+    )
+    
+    if result['success']:
+        update.message.reply_text("✅ Maintenance reason updated successfully.")
+    else:
+        update.message.reply_text(f"❌ Failed to update: {result.get('error', 'Unknown error')}")
+    
+    # Show maintenance menu again
+    reply_markup = KeyboardBuilder.create_maintenance_keyboard(DBUtils.get_maintenance_schedules())
+    update.message.reply_text(
+        "🔧 *Maintenance Schedule Management*\n\n"
+        "Select an existing schedule to edit, or create a new one:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_MAINTENANCE
+
+def skip_update_reason(update, context):
+    """Skip providing a reason, clearing the existing one"""
+    maintenance_id = context.user_data.get('editing_maintenance_id')
+    if not maintenance_id:
+        update.message.reply_text("❌ Error: Maintenance ID not found. Please try again.")
+        return show_maintenance_menu(update, context)
+    
+    # Update in database with empty reason
+    result = DBUtils.update_maintenance(
+        maintenance_id, 
+        update.effective_user.id,
+        reason=""  # Set to empty string to clear
+    )
+    
+    if result['success']:
+        update.message.reply_text("✅ Maintenance reason cleared successfully.")
+    else:
+        update.message.reply_text(f"❌ Failed to update: {result.get('error', 'Unknown error')}")
+    
+    # Show maintenance menu again
+    reply_markup = KeyboardBuilder.create_maintenance_keyboard(DBUtils.get_maintenance_schedules())
+    update.message.reply_text(
+        "🔧 *Maintenance Schedule Management*\n\n"
+        "Select an existing schedule to edit, or create a new one:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_MAINTENANCE
+
+# Maintenance notification
+def check_and_send_maintenance_notifications(context):
+    """Check for maintenance scheduled today or tomorrow and send notifications"""
+    try:
+        today = date.today()
+        tomorrow = today + timedelta(days=1)
+        
+        # Get maintenance scheduled for today or tomorrow
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+        SELECT 
+            id,
+            maintenance_date,
+            start_time,
+            end_time,
+            reason,
+            sent_notification
+        FROM maintenance
+        WHERE 
+            maintenance_date IN (?, ?) AND
+            (
+                (maintenance_date = ? AND sent_notification < 1) OR 
+                (maintenance_date = ? AND sent_notification < 2)
+            )
+        """, (today, tomorrow, today, tomorrow))
+        
+        schedules = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        for maintenance in schedules:
+            # Format date and times for display
+            if isinstance(maintenance['maintenance_date'], str):
+                maintenance_date = datetime.strptime(maintenance['maintenance_date'], '%Y-%m-%d').date()
+                display_date = maintenance_date.strftime('%d/%m/%Y')
+            else:
+                maintenance_date = maintenance['maintenance_date']
+                display_date = maintenance_date.strftime('%d/%m/%Y')
+                
+            if isinstance(maintenance['start_time'], str):
+                start_time = maintenance['start_time'].split('.')[0]  # Remove microseconds
+                start_time_display = start_time[:5]  # Just HH:MM
+            else:
+                start_time_display = maintenance['start_time'].strftime('%H:%M')
+                
+            if isinstance(maintenance['end_time'], str):
+                end_time = maintenance['end_time'].split('.')[0]  # Remove microseconds
+                end_time_display = end_time[:5]  # Just HH:MM
+            else:
+                end_time_display = maintenance['end_time'].strftime('%H:%M')
+            
+            # Determine notification type (day before or day of)
+            is_today = (maintenance_date == today)
+            
+            # Create notification message
+            message = (
+                "🔧 *SCHEDULED MAINTENANCE NOTICE* 🔧\n\n"
+                f"The bot will be undergoing maintenance "
+            )
+            
+            if is_today:
+                message += f"*TODAY* ({display_date}):\n"
+            else:
+                message += f"*TOMORROW* ({display_date}):\n"
+                
+            message += (
+                f"⏰ *Time:* {start_time_display} - {end_time_display}\n\n"
+            )
+            
+            if maintenance.get('reason'):
+                message += f"*Reason:* {maintenance['reason']}\n\n"
+                
+            message += (
+                "During this period, the bot may be unresponsive or have limited functionality. "
+                "We apologize for any inconvenience and appreciate your patience.\n\n"
+                "_This is an automated message. Please do not reply._"
+            )
+            
+            # Get all users
+            users = DBUtils.get_all_users()
+            
+            # Send notifications
+            notification_count = 0
+            for user_id in users:
+                try:
+                    context.bot.send_message(
+                        chat_id=user_id,
+                        text=message,
+                        parse_mode='Markdown'
+                    )
+                    notification_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to send maintenance notification to user {user_id}: {e}")
+            
+            # Update notification status
+            # For "tomorrow" maintenance, set sent_notification to 1
+            # For "today" maintenance, set sent_notification to 2
+            new_status = 2 if is_today else 1
+            
+            conn = DBUtils.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+            UPDATE maintenance
+            SET sent_notification = ?
+            WHERE id = ? AND sent_notification < ?
+            """, (new_status, maintenance['id'], new_status))
+            conn.commit()
+            conn.close()
+            
+            logger.info(f"Maintenance notification ({new_status}) sent to {notification_count} users for maintenance ID {maintenance['id']}")
+            
+    except Exception as e:
+        logger.error(f"Error checking maintenance notifications: {e}")
+
+# End def to manage maintenance
+
 def check_telegram_stars_availability(bot):
     """Check if Telegram Stars are available for this bot"""
     try:
@@ -1083,6 +1711,9 @@ def handle_admin_choice(update, context):
             "Please enter the Telegram ID of the user you want to make an admin:"
         )
         return ADMIN_ADD_ADMIN
+
+    elif query.data == 'admin_maintenance':
+        return show_maintenance_menu(update, context)
     
     elif query.data.startswith('admin_hike_'):
         hike_id = int(query.data.replace('admin_hike_', ''))
@@ -3029,6 +3660,7 @@ def main():
                 CommandHandler('restart', restart),
                 CommandHandler('admin', cmd_admin),
                 CallbackQueryHandler(handle_admin_choice, pattern='^admin_'),
+                CallbackQueryHandler(show_maintenance_menu, pattern='^admin_maintenance$'),
                 CallbackQueryHandler(handle_admin_choice, pattern='^confirm_cancel_hike_'),
                 CallbackQueryHandler(handle_admin_choice, pattern='^confirm_reactivate_hike_'),
                 CallbackQueryHandler(handle_admin_choice, pattern='^back_to_admin$'),
@@ -3079,6 +3711,47 @@ def main():
                 CommandHandler('restart', restart),
                 MessageHandler(Filters.text & ~Filters.command, add_admin_handler)
             ],
+            ADMIN_MAINTENANCE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(start_maintenance_creation, pattern='^add_maintenance$'),
+                CallbackQueryHandler(handle_maintenance_selection, pattern='^edit_maintenance_\\d+$'),
+                CallbackQueryHandler(handle_maintenance_action, pattern='^maintenance_'),
+                CallbackQueryHandler(delete_maintenance_schedule, pattern='^confirm_delete_maintenance_\\d+$'),
+                CallbackQueryHandler(handle_admin_choice, pattern='^back_to_admin$'),
+                CallbackQueryHandler(menu, pattern='^back_to_menu$')
+            ],
+            MAINTENANCE_DATE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, 
+                              lambda u, c: update_maintenance_date(u, c) if 'editing_maintenance_id' in c.user_data 
+                                         else save_maintenance_date(u, c))
+            ],
+            MAINTENANCE_START_TIME: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, 
+                              lambda u, c: update_maintenance_time(u, c) if 'editing_maintenance_id' in c.user_data and 'new_maintenance_start' not in c.user_data 
+                                         else save_maintenance_start_time(u, c))
+            ],
+            MAINTENANCE_END_TIME: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, 
+                              lambda u, c: update_maintenance_end_time(u, c) if 'editing_maintenance_id' in c.user_data and 'new_maintenance_start' in c.user_data 
+                                         else save_maintenance_end_time(u, c))
+            ],
+            MAINTENANCE_REASON: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CommandHandler('skip', 
+                              lambda u, c: skip_update_reason(u, c) if 'editing_maintenance_id' in c.user_data 
+                                         else skip_maintenance_reason(u, c)),
+                MessageHandler(Filters.text & ~Filters.command, 
+                              lambda u, c: update_maintenance_reason(u, c) if 'editing_maintenance_id' in c.user_data 
+                                         else save_maintenance_reason(u, c))
+            ],            
             PRIVACY_CONSENT: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
@@ -3191,6 +3864,11 @@ def main():
         callback=check_and_send_reminders,
         time=datetime_time(hour=9, minute=0, tzinfo=rome_tz)  # Send reminders at 9:00 Rome time
     )
+    # Check maintenance notification every 15 mins
+    job_queue.run_daily(
+        callback=check_and_send_maintenance_notifications,
+        time=datetime_time(hour=9, minute=30, tzinfo=rome_tz)  # Send maintenance alert at 9:30 Rome time
+    )
     
     # Register handlers
     # adds the main conversation manager
@@ -3215,6 +3893,9 @@ def main():
             allowed_updates=['message', 'callback_query']
         )
         logger.info("Bot started! Press CTRL+C to stop.")
+        
+        check_and_send_maintenance_notifications(updater)
+        
         updater.idle()
     except Exception as e:
         logger.error(f"Error starting bot: {e}")
