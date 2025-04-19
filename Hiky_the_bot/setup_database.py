@@ -26,6 +26,12 @@ def setup_database():
     CREATE TABLE IF NOT EXISTS users (
         telegram_id INTEGER PRIMARY KEY,
         username TEXT,
+        name TEXT NOT NULL,
+        surname TEXT NOT NULL,
+        email TEXT,
+        phone TEXT NOT NULL,
+        birth_date TEXT NOT NULL,
+        is_guide BOOLEAN NOT NULL DEFAULT 0,
         registration_timestamp TIMESTAMP,
         last_updated TIMESTAMP,
         basic_consent BOOLEAN NOT NULL DEFAULT 0,
@@ -110,8 +116,8 @@ def setup_database():
             
             # Add user record first if it doesn't exist
             cursor.execute('''
-            INSERT OR IGNORE INTO users (telegram_id, registration_timestamp, last_updated, basic_consent)
-            VALUES (?, ?, ?, 1)
+            INSERT OR IGNORE INTO users (telegram_id, registration_timestamp, last_updated, basic_consent, is_guide)
+            VALUES (?, ?, ?, 1, 1)
             ''', (telegram_id, datetime.now(), datetime.now()))
             
             # Add admin record
