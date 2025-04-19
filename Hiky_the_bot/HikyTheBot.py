@@ -48,7 +48,8 @@ logger.info(f"Using python-telegram-bot version: {telegram.__version__}")
  ELSEWHERE, NOTES, IMPORTANT_NOTES, REMINDER_CHOICE, PRIVACY_CONSENT, 
  ADMIN_MENU, ADMIN_CREATE_HIKE, ADMIN_HIKE_NAME, ADMIN_HIKE_DATE, 
  ADMIN_HIKE_MAX_PARTICIPANTS, ADMIN_HIKE_LOCATION, ADMIN_HIKE_DIFFICULTY,
- ADMIN_HIKE_DESCRIPTION, ADMIN_CONFIRM_HIKE, ADMIN_ADD_ADMIN, DONATION, ADMIN_HIKE_GUIDES) = range(30)
+ ADMIN_HIKE_DESCRIPTION, ADMIN_CONFIRM_HIKE, ADMIN_ADD_ADMIN, DONATION, ADMIN_HIKE_GUIDES,
+ PROFILE_MENU, PROFILE_EDIT, PROFILE_NAME, PROFILE_SURNAME, PROFILE_EMAIL,  PROFILE_PHONE, PROFILE_BIRTH_DATE) = range(37)
 
 # Define timezone for Rome (for consistent timestamps)
 rome_tz = pytz.timezone('Europe/Rome')
@@ -264,6 +265,383 @@ def cmd_admin(update, context):
     )
     return ADMIN_MENU
 
+# Start def to manage personal profile
+def show_profile_menu(update, context):
+    """Show profile menu options"""
+    query = update.callback_query
+    query.answer()
+    
+    reply_markup = KeyboardBuilder.create_profile_keyboard()
+    
+    query.edit_message_text(
+        "👤 *Personal Profile*\n\n"
+        "Manage your personal information here. This information will be used for hike registrations.",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return PROFILE_MENU
+
+def view_profile(update, context):
+    """Show user profile information"""
+    query = update.callback_query
+    query.answer()
+    
+    user_id = query.from_user.id
+    profile = DBUtils.get_user_profile(user_id)
+    
+    if not profile or not (profile.get('name') or profile.get('surname') or profile.get('email')):
+        # Profile data incomplete or not set
+        message = (
+            "👤 *Your Profile*\n\n"
+            "Your profile is not complete. Please use the 'Edit profile' option to set up your profile information."
+        )
+    else:
+        # Format birth date if exists
+        birth_date = profile.get('birth_date', '')
+        if birth_date:
+            try:
+                # Try to convert to display format if stored in database format
+                birth_date = datetime.strptime(birth_date, '%d/%m/%Y').strftime('%d/%m/%Y')
+            except ValueError:
+                # If it's already in display format or another format, use as is
+                pass
+                
+        message = (
+            "👤 *Your Profile*\n\n"
+            f"*Telegram ID:* {profile.get('telegram_id', '')}\n"
+            f"*Username:* @{profile.get('username', '')}\n"
+            f"*Name:* {profile.get('name', 'Not set')}\n"
+            f"*Surname:* {profile.get('surname', 'Not set')}\n"
+            f"*Email:* {profile.get('email', 'Not set')}\n"
+            f"*Phone:* {profile.get('phone', 'Not set')}\n"
+            f"*Birth Date:* {birth_date or 'Not set'}\n"
+        )
+        
+        # Add guide status if applicable
+        if profile.get('is_guide'):
+            message += f"\n*Role:* 👑 Guide"
+    
+    # Back to profile menu button
+    keyboard = [[InlineKeyboardButton("🔙 Back to profile menu", callback_data='back_to_profile')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    query.edit_message_text(text=message, parse_mode='Markdown', reply_markup=reply_markup)
+    return PROFILE_MENU
+
+def edit_profile_menu(update, context):
+    """Show edit profile menu"""
+    query = update.callback_query
+    query.answer()
+    
+    reply_markup = KeyboardBuilder.create_edit_profile_keyboard()
+    
+    query.edit_message_text(
+        "📝 *Edit Profile*\n\n"
+        "Select the information you want to update:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return PROFILE_EDIT
+
+def edit_profile_field(update, context):
+    """Handle selection of which profile field to edit"""
+    query = update.callback_query
+    query.answer()
+    
+    field = query.data.replace('edit_', '')
+    context.user_data['editing_field'] = field
+    
+    field_names = {
+        'name': 'Name',
+        'surname': 'Surname',
+        'email': 'Email',
+        'phone': 'Phone number',
+        'birth_date': 'Birth date'
+    }
+    
+    if field == 'birth_date':
+        query.edit_message_text(
+            "📅 Select the decade of your birth year:",
+            reply_markup=create_year_selector()
+        )
+        return PROFILE_BIRTH_DATE
+    else:
+        query.edit_message_text(
+            f"Please enter your {field_names.get(field, field)}:"
+        )
+        
+        # Set appropriate state based on field
+        states = {
+            'name': PROFILE_NAME,
+            'surname': PROFILE_SURNAME,
+            'email': PROFILE_EMAIL,
+            'phone': PROFILE_PHONE
+        }
+        return states.get(field, PROFILE_EDIT)
+
+def save_profile_name(update, context):
+    """Save name from user input"""
+    user_id = update.effective_user.id
+    name = update.message.text
+    
+    # Get current profile data
+    profile = DBUtils.get_user_profile(user_id) or {}
+    profile['name'] = name
+    
+    # Update profile in database
+    result = DBUtils.update_user_profile(user_id, profile)
+    
+    if result['success']:
+        update.message.reply_text(
+            "✅ Your name has been updated successfully."
+        )
+    else:
+        update.message.reply_text(
+            f"❌ Error updating profile: {result.get('error', 'Unknown error')}"
+        )
+    
+    # Return to edit menu
+    reply_markup = KeyboardBuilder.create_edit_profile_keyboard()
+    update.message.reply_text(
+        "What else would you like to edit?",
+        reply_markup=reply_markup
+    )
+    return PROFILE_EDIT
+
+def save_profile_surname(update, context):
+    """Save surname from user input"""
+    user_id = update.effective_user.id
+    surname = update.message.text
+    
+    # Get current profile data
+    profile = DBUtils.get_user_profile(user_id) or {}
+    profile['surname'] = surname
+    
+    # Update profile in database
+    result = DBUtils.update_user_profile(user_id, profile)
+    
+    if result['success']:
+        update.message.reply_text(
+            "✅ Your surname has been updated successfully."
+        )
+    else:
+        update.message.reply_text(
+            f"❌ Error updating profile: {result.get('error', 'Unknown error')}"
+        )
+    
+    # Return to edit menu
+    reply_markup = KeyboardBuilder.create_edit_profile_keyboard()
+    update.message.reply_text(
+        "What else would you like to edit?",
+        reply_markup=reply_markup
+    )
+    return PROFILE_EDIT
+
+def save_profile_email(update, context):
+    """Save email from user input"""
+    user_id = update.effective_user.id
+    email = update.message.text
+    
+    # Get current profile data
+    profile = DBUtils.get_user_profile(user_id) or {}
+    profile['email'] = email
+    
+    # Update profile in database
+    result = DBUtils.update_user_profile(user_id, profile)
+    
+    if result['success']:
+        update.message.reply_text(
+            "✅ Your email has been updated successfully."
+        )
+    else:
+        update.message.reply_text(
+            f"❌ Error updating profile: {result.get('error', 'Unknown error')}"
+        )
+    
+    # Return to edit menu
+    reply_markup = KeyboardBuilder.create_edit_profile_keyboard()
+    update.message.reply_text(
+        "What else would you like to edit?",
+        reply_markup=reply_markup
+    )
+    return PROFILE_EDIT
+
+def save_profile_phone(update, context):
+    """Save phone number from user input"""
+    user_id = update.effective_user.id
+    phone = update.message.text
+    
+    # Get current profile data
+    profile = DBUtils.get_user_profile(user_id) or {}
+    profile['phone'] = phone
+    
+    # Update profile in database
+    result = DBUtils.update_user_profile(user_id, profile)
+    
+    if result['success']:
+        update.message.reply_text(
+            "✅ Your phone number has been updated successfully."
+        )
+    else:
+        update.message.reply_text(
+            f"❌ Error updating profile: {result.get('error', 'Unknown error')}"
+        )
+    
+    # Return to edit menu
+    reply_markup = KeyboardBuilder.create_edit_profile_keyboard()
+    update.message.reply_text(
+        "What else would you like to edit?",
+        reply_markup=reply_markup
+    )
+    return PROFILE_EDIT
+
+def handle_profile_birth_date(update, context):
+    """Handle date selection from calendar for profile"""
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    data = query.data.split('_')
+    action = data[0]
+    
+    if action == 'decade':
+        decade = int(data[1])
+        query.edit_message_text(
+            "📅 Select your birth year:",
+            reply_markup=create_year_buttons(decade)
+        )
+        return PROFILE_BIRTH_DATE
+        
+    elif action == 'year':
+        year = int(data[1])
+        context.user_data['birth_year'] = year
+        query.edit_message_text(
+            "📅 Select birth month:",
+            reply_markup=create_month_buttons(year)
+        )
+        return PROFILE_BIRTH_DATE
+        
+    elif action == 'month':
+        year = int(data[1])
+        month = int(data[2])
+        query.edit_message_text(
+            "📅 Select birth day:",
+            reply_markup=create_calendar(year, month)
+        )
+        return PROFILE_BIRTH_DATE
+        
+    elif action == 'date':
+        year = int(data[1])
+        month = int(data[2])
+        day = int(data[3])
+        
+        selected_date = f"{day:02d}/{month:02d}/{year}"
+        context.user_data['birth_date'] = selected_date
+        
+        # Save birth date to user profile
+        user_id = query.from_user.id
+        profile = DBUtils.get_user_profile(user_id) or {}
+        profile['birth_date'] = selected_date
+        
+        # Update profile in database
+        result = DBUtils.update_user_profile(user_id, profile)
+        
+        if result['success']:
+            query.edit_message_text(
+                f"✅ Your birth date has been updated to {selected_date}."
+            )
+        else:
+            query.edit_message_text(
+                f"❌ Error updating birth date: {result.get('error', 'Unknown error')}"
+            )
+        
+        # Return to edit menu
+        reply_markup = KeyboardBuilder.create_edit_profile_keyboard()
+        context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="What else would you like to edit?",
+            reply_markup=reply_markup
+        )
+        return PROFILE_EDIT
+    
+    return PROFILE_BIRTH_DATE
+
+def handle_profile_choice(update, context):
+    """Handle profile menu choices"""
+    query = update.callback_query
+    logger.info(f"Profile choice: {query.data} by user {query.from_user.id}")
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+    
+    if query.data == 'view_profile':
+        return view_profile(update, context)
+    
+    elif query.data == 'edit_profile':
+        return edit_profile_menu(update, context)
+    
+    elif query.data == 'back_to_profile':
+        return show_profile_menu(update, context)
+    
+    elif query.data == 'back_to_menu':
+        return menu(update, context)
+    
+    return PROFILE_MENU
+
+def handle_save_profile(update, context):
+    """Handle saving profile changes"""
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+    
+    # Collect all profile data from context
+    profile_data = {
+        'name': context.user_data.get('profile_name'),
+        'surname': context.user_data.get('profile_surname'),
+        'email': context.user_data.get('profile_email'),
+        'phone': context.user_data.get('profile_phone'),
+        'birth_date': context.user_data.get('profile_birth_date')
+    }
+    
+    # Update profile in database
+    user_id = query.from_user.id
+    result = DBUtils.update_user_profile(user_id, profile_data)
+    
+    if result['success']:
+        query.edit_message_text(
+            "✅ Your profile has been updated successfully."
+        )
+    else:
+        query.edit_message_text(
+            f"❌ Error updating profile: {result.get('error', 'Unknown error')}"
+        )
+    
+    # Return to profile menu
+    context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="👤 *Personal Profile*\n\n"
+             "Manage your personal information here. This information will be used for hike registrations.",
+        parse_mode='Markdown',
+        reply_markup=KeyboardBuilder.create_profile_keyboard()
+    )
+    return PROFILE_MENU
+
+# End def to manage personal profile
+
 def check_telegram_stars_availability(bot):
     """Check if Telegram Stars are available for this bot"""
     try:
@@ -326,8 +704,11 @@ def handle_menu_choice(update, context):
     
     if not check_user_membership(update, context):
         return handle_non_member(update, context)
+
+    if query.data == 'personal_profile':
+        return show_profile_menu(update, context)
     
-    if query.data == 'manage_hikes':
+    elif query.data == 'manage_hikes':
         reply_markup = KeyboardBuilder.create_manage_hikes_keyboard()
         query.edit_message_text(
             "🏔️ *Hike Management*\n\n"
@@ -350,8 +731,21 @@ def handle_menu_choice(update, context):
         
         # Store available hikes for later use
         context.user_data['available_hikes'] = available_hikes
-        query.edit_message_text("👋 Name and surname?")
-        return NAME
+
+        # Check if profile info exists to skip name input
+        user_id = query.from_user.id
+        profile = DBUtils.get_user_profile(user_id)
+
+        if profile and profile.get('name') and profile.get('surname'):
+            # Use profile info
+            context.user_data['name_surname'] = f"{profile.get('name')} {profile.get('surname')}"
+            # Skip to email
+            query.edit_message_text("📧 Email?")
+            return EMAIL
+        else:
+            # Ask for name
+            query.edit_message_text("👋 Name and surname?")
+            return NAME
     
     elif query.data == 'myhikes':
         return show_my_hikes(query, context)
@@ -2057,7 +2451,7 @@ def handle_car_share(update, context):
     
     context.bot.send_message(
         chat_id=query.message.chat_id,
-        text="📍 Where do you live?\n"
+        text="📍 What is your starting point?\n"
              "_This information helps us organize transport and meeting points_",
         parse_mode='Markdown',
         reply_markup=reply_markup
@@ -2466,7 +2860,7 @@ def main():
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CommandHandler('admin', cmd_admin),
-                CallbackQueryHandler(handle_menu_choice, pattern='^(manage_hikes|signup|myhikes|calendar|links|donation|back_to_menu|admin_menu)$'),
+                CallbackQueryHandler(handle_menu_choice, pattern='^(personal_profile|manage_hikes|signup|myhikes|calendar|links|donation|back_to_menu|admin_menu)$'),
                 CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)$'),
                 CallbackQueryHandler(handle_cancel_request, pattern='^cancel_hike_\\d+$'),
                 CallbackQueryHandler(handle_cancel_confirmation, pattern='^(confirm_cancel|abort_cancel)$'),
@@ -2478,6 +2872,44 @@ def main():
                 CallbackQueryHandler(handle_donation, pattern='^donation_'),
                 CallbackQueryHandler(menu, pattern='^back_to_menu$')
             ],
+            PROFILE_MENU: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_profile_choice, pattern='^(view_profile|edit_profile|back_to_profile|back_to_menu)$')
+            ],
+            PROFILE_EDIT: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(edit_profile_field, pattern='^edit_'),
+                CallbackQueryHandler(handle_save_profile, pattern='^save_profile$'),
+                CallbackQueryHandler(show_profile_menu, pattern='^back_to_profile$'),
+                CallbackQueryHandler(menu, pattern='^back_to_menu$')
+            ],
+            PROFILE_NAME: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, save_profile_name)
+            ],
+            PROFILE_SURNAME: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, save_profile_surname)
+            ],
+            PROFILE_EMAIL: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, save_profile_email)
+            ],
+            PROFILE_PHONE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, save_profile_phone)
+            ],
+            PROFILE_BIRTH_DATE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_profile_birth_date)
+            ],            
             ADMIN_MENU: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
