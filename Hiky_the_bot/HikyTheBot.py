@@ -129,7 +129,7 @@ def error_handler(update, context):
             "🤖 Oops! Looks like I had a brief power nap! 😴\n\n"
             "The server decided to take a coffee break while you were filling out the form. "
             "I know, bad timing! 🙈\n\n"
-            "Could you use /menu to start again? I promise to stay awake this time! ⚡"
+            "Could you use the button below to start again? I promise to stay awake this time! ⚡"
         )
     except telegram.error.Unauthorized:
         # User has blocked the bot
@@ -137,7 +137,7 @@ def error_handler(update, context):
     except telegram.error.TimedOut:
         message = (
             "⏰ Time out! Even robots need a breather sometimes!\n\n"
-            "Let's start fresh with /menu - I'll be quicker this time! 🏃‍♂️"
+            "Let's start fresh - I'll be quicker this time! 🏃‍♂️"
         )
     except telegram.error.BadRequest as e:
         if "Message is not modified" in str(e):
@@ -147,32 +147,40 @@ def error_handler(update, context):
             "🤖 *System reboot detected!*\n\n"
             "Sorry, looks like my circuits got a bit scrambled during a server update. "
             "These things happen when you're a bot living in the cloud! ☁️\n\n"
-            "Could you help me out by using /menu to start over? "
+            "Could you help me out by starting over? "
             "I promise to keep all my circuits in order this time! 🔧✨"
         )
     except Exception:
         message = (
             "🤖 *Beep boop... something went wrong!*\n\n"
             "My processors got a bit tangled up there! 🎭\n"
-            "Let's try again with /menu - second time's the charm! ✨\n\n"
+            "Let's try again - second time's the charm! ✨\n\n"
             "_Note: If this keeps happening, you can always reach out to the hiking group for help!_"
         )
 
     # Send message to user if possible
     if update and update.effective_chat:
         try:
+            keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text=message,
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                reply_markup=reply_markup
             )
         except Exception as send_error:
             logger.error(f"Error sending error message: {send_error}")
             # Try one last send without markdown if first one fails
             try:
+                keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
                 context.bot.send_message(
                     chat_id=update.effective_chat.id,
-                    text=message.replace('*', '').replace('_', '')
+                    text=message.replace('*', '').replace('_', ''),
+                    reply_markup=reply_markup
                 )
             except:
                 pass
@@ -805,9 +813,11 @@ def handle_menu_choice(update, context):
         available_hikes = DBUtils.get_available_hikes(query.from_user.id)
         
         if not available_hikes:
+            keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
             query.edit_message_text(
-                "There are no available hikes at the moment.\n"
-                "Use /menu to go back to the home menu."
+                "There are no available hikes at the moment."
             )
             return CHOOSING
         
@@ -1012,9 +1022,12 @@ def handle_admin_choice(update, context):
         hikes = DBUtils.get_available_hikes(include_inactive=True)
     
         if not hikes:
+            keyboard = [[InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
             query.edit_message_text(
-                "There are no hikes at the moment.\n"
-                "Use /admin to go back to the admin menu."
+                "There are no hikes at the moment.",
+                reply_markup=reply_markup
             )
             return ADMIN_MENU
         
@@ -1971,12 +1984,15 @@ def show_my_hikes(update, context):
     hikes = DBUtils.get_user_hikes(user_id)
     
     if not hikes:
-        message = "You are not registered for any hikes yet.\nUse /menu to go back to the home menu."
+        keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = "You are not registered for any hikes yet."
         if query:
-            query.edit_message_text(message)
+            query.edit_message_text(message, reply_markup=reply_markup)
         else:
-            update.message.reply_text(message)
-        return ConversationHandler.END
+            update.message.reply_text(message, reply_markup=reply_markup)
+        return CHOOSING
         
     context.user_data['my_hikes'] = hikes
     context.user_data['current_hike_index'] = 0
@@ -2085,11 +2101,14 @@ def show_hike_calendar(update, context):
     hikes = DBUtils.get_available_hikes(include_inactive=False, include_registered=True)
     
     if not hikes:
-        message = "There are no upcoming hikes in the calendar.\nUse /menu to go back to the home menu."
+        keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = "There are no upcoming hikes in the calendar."
         if query:
-            query.edit_message_text(message)
+            query.edit_message_text(message, reply_markup=reply_markup)
         else:
-            update.message.reply_text(message)
+            update.message.reply_text(message, reply_markup=reply_markup)
         return CHOOSING
     
     # Group hikes by month
@@ -2170,19 +2189,22 @@ def handle_cancel_confirmation(update, context):
     
     # Cancel registration in database
     result = DBUtils.cancel_registration(user_id, hike_to_cancel['registration_id'])
+
+    keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     if result['success']:
         query.edit_message_text(
-            "✅ Registration successfully cancelled.\n"
-            "Use /menu to go back to the home menu."
+            "✅ Registration successfully cancelled.",
+            reply_markup=reply_markup
         )
     else:
         query.edit_message_text(
-            f"❌ Could not cancel registration: {result.get('error', 'Unknown error')}.\n"
-            "Use /menu to go back to the home menu."
+            f"❌ Could not cancel registration: {result.get('error', 'Unknown error')}.",
+            reply_markup=reply_markup
         )
         
-    return ConversationHandler.END
+    return CHOOSING
 
 # Registration form handlers
 def save_name(update, context):
@@ -2746,44 +2768,53 @@ def handle_final_choice(update, context):
                 error_messages.append(f"Hike '{hike['hike_name']}': {result['error']}")
         
         # Display results
+        keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         if success_count == len(selected_hikes):
             query.edit_message_text(
-                "✅ Thanks for signing up for the hike(s).\n"
-                "You can use /menu to go back to the home menu."
+                "✅ Thanks for signing up for the hike(s)."
             )
         elif success_count > 0:
             # Some registrations succeeded, some failed
             query.edit_message_text(
                 f"✅ {success_count} out of {len(selected_hikes)} registrations were successful.\n\n"
                 f"The following errors occurred:\n"
-                f"{', '.join(error_messages)}\n\n"
-                f"You can use /menu to go back to the home menu."
+                f"{', '.join(error_messages)}",
+                reply_markup=reply_markup
             )
         else:
             # All registrations failed
             query.edit_message_text(
                 f"❌ Registration failed for all selected hikes.\n\n"
                 f"Errors:\n"
-                f"{', '.join(error_messages)}\n\n"
-                f"You can use /menu to go back to the home menu."
+                f"{', '.join(error_messages)}",
+                reply_markup=reply_markup
             )
     else:
+        keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         query.edit_message_text(
             "❌ We are sorry but accepting these rules is necessary to participate in the walks.\n"
-            "Thank you for your time.\n"
-            "You can use /menu to go back to the home menu."
+            "Thank you for your time.",
+            reply_markup=reply_markup
         )
         
-    return ConversationHandler.END
+    return CHOOSING
 
 def cancel(update, context):
     """Handle /cancel command"""
     context.user_data.clear()
+    
+    keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
     update.message.reply_text(
-        '❌ Operation cancelled.\n'
-        'You can use /menu to go back to the home menu.'
+        '❌ Operation cancelled.',
+        reply_markup=reply_markup
     )
-    return ConversationHandler.END
+    return CHOOSING
 
 def handle_invalid_message(update, context):
     """Handle invalid or unexpected messages"""
