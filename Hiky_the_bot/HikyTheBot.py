@@ -2219,7 +2219,7 @@ def save_email(update, context):
     """Save email from user input"""
     context.chat_data['last_state'] = EMAIL
     context.user_data['email'] = update.message.text
-    update.message.reply_text("📱 Phone number?")
+    update.message.reply_text("📱 Phone number (with international prefix)?")
     return PHONE
 
 def save_phone(update, context):
