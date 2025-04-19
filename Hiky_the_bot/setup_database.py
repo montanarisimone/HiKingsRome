@@ -114,7 +114,7 @@ def setup_database():
         reason TEXT,
         created_by INTEGER,
         created_on TIMESTAMP,
-        sent_notification INTEGER DEFAULT 0,  # 0=none, 1=day-before, 2=day-of
+        sent_notification INTEGER DEFAULT 0,
         FOREIGN KEY (created_by) REFERENCES users(telegram_id)
     )
     ''')
