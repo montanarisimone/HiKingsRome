@@ -837,6 +837,224 @@ class DBUtils:
             return {"success": False, "error": str(e)}
 
     @staticmethod
+    def add_maintenance(admin_id, maintenance_date, start_time, end_time, reason=None):
+        """Add a new maintenance schedule"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now(rome_tz).strftime("%Y-%m-%d %H:%M:%S")
+        
+        try:
+            cursor.execute("""
+            INSERT INTO maintenance (
+                maintenance_date,
+                start_time,
+                end_time,
+                reason,
+                created_by,
+                created_on,
+                sent_notification
+            ) VALUES (?, ?, ?, ?, ?, ?, 0)
+            """, (
+                maintenance_date,
+                start_time,
+                end_time,
+                reason,
+                admin_id,
+                now
+            ))
+            
+            maintenance_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            return {"success": True, "maintenance_id": maintenance_id}
+
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def update_maintenance(maintenance_id, admin_id, maintenance_date=None, start_time=None, end_time=None, reason=None):
+        """Update existing maintenance schedule"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        # Check if admin
+        if not DBUtils.check_is_admin(admin_id):
+            conn.close()
+            return {"success": False, "error": "Admin privileges required"}
+        
+        # Build update query
+        update_fields = []
+        params = []
+
+        if maintenance_date:
+            update_fields.append("maintenance_date = ?")
+            params.append(maintenance_date)
+            
+        if start_time:
+            update_fields.append("start_time = ?")
+            params.append(start_time)
+            
+        if end_time:
+            update_fields.append("end_time = ?")
+            params.append(end_time)
+            
+        if reason is not None:  # Allow empty reason
+            update_fields.append("reason = ?")
+            params.append(reason)
+        
+        # Reset notification flag if date or time changed
+        if maintenance_date or start_time or end_time:
+            update_fields.append("sent_notification = 0")
+        
+        if not update_fields:
+            conn.close()
+            return {"success": True}  # Nothing to update
+        
+        params.append(maintenance_id)
+        
+        try:
+            cursor.execute(f"""
+            UPDATE maintenance
+            SET {', '.join(update_fields)}
+            WHERE id = ?
+            """, params)
+            
+            conn.commit()
+            conn.close()
+            return {"success": True}
+            
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def delete_maintenance(maintenance_id, admin_id):
+        """Delete maintenance schedule"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        # Check if admin
+        if not DBUtils.check_is_admin(admin_id):
+            conn.close()
+            return {"success": False, "error": "Admin privileges required"}
+        
+        try:
+            cursor.execute("""
+            DELETE FROM maintenance
+            WHERE id = ?
+            """, (maintenance_id,))
+            
+            conn.commit()
+            conn.close()
+            return {"success": True}
+            
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def get_maintenance_schedules(include_past=False):
+        """Get all maintenance schedules, optionally including past schedules"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        today = date.today()
+        now = datetime.now().time()
+        
+        query = """
+        SELECT 
+            id,
+            maintenance_date,
+            start_time,
+            end_time,
+            reason,
+            created_by,
+            created_on,
+            sent_notification
+        FROM maintenance
+        """
+        
+        if not include_past:
+            query += """
+            WHERE (maintenance_date > ?) OR
+                  (maintenance_date = ? AND end_time > ?)
+            """
+            cursor.execute(query, (today, today, now))
+        else:
+            cursor.execute(query)
+        
+        schedules = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return schedules
+    
+    @staticmethod
+    def get_pending_maintenance_notifications():
+        """Get maintenance schedules that need notifications sent"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        today = date.today()
+        now = datetime.now()
+        
+        # Find maintenance scheduled in the next 2 hours that haven't had notifications sent
+        two_hours_later = (now + timedelta(hours=2))
+        notification_date = two_hours_later.date()
+        notification_time = two_hours_later.time()
+        
+        cursor.execute("""
+        SELECT 
+            id,
+            maintenance_date,
+            start_time,
+            end_time,
+            reason
+        FROM maintenance
+        WHERE 
+            sent_notification = 0 AND
+            ((maintenance_date = ? AND start_time <= ?) OR
+             (maintenance_date = ? AND ? > ?))
+        """, (
+            notification_date, notification_time,  # Same day, starting within 2 hours
+            today, notification_date, today        # Different day, but within 2 hours
+        ))
+        
+        schedules = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return schedules
+    
+    @staticmethod
+    def mark_maintenance_notification_sent(maintenance_id):
+        """Mark that a notification has been sent for this maintenance"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+        UPDATE maintenance
+        SET sent_notification = 1
+        WHERE id = ?
+        """, (maintenance_id,))
+        
+        conn.commit()
+        conn.close()
+        return True
+    
+    @staticmethod
+    def get_all_users():
+        """Get all user IDs for sending notifications"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT telegram_id FROM users")
+        users = [row['telegram_id'] for row in cursor.fetchall()]
+        
+        conn.close()
+        return users
+
+    @staticmethod
     def reactivate_hike(hike_id, admin_id):
         """Reactivate a cancelled hike by setting is_active to 1 (admin only)"""
         conn = DBUtils.get_connection()
