@@ -890,7 +890,7 @@ def save_maintenance_schedule(update, context):
         if maintenance_data['reason']:
             message += f"🗒 Reason: {maintenance_data['reason']}\n\n"
             
-        message += "Users will be notified 2 hours before the maintenance starts."
+        message += "Users will be notified before the maintenance starts."
         
         # Create back button
         keyboard = [[InlineKeyboardButton("🔙 Back to maintenance menu", callback_data='admin_maintenance')]]
@@ -3718,6 +3718,7 @@ def main():
                 CallbackQueryHandler(handle_maintenance_selection, pattern='^edit_maintenance_\\d+$'),
                 CallbackQueryHandler(handle_maintenance_action, pattern='^maintenance_'),
                 CallbackQueryHandler(delete_maintenance_schedule, pattern='^confirm_delete_maintenance_\\d+$'),
+                CallbackQueryHandler(show_maintenance_menu, pattern='^admin_maintenance$'),
                 CallbackQueryHandler(handle_admin_choice, pattern='^back_to_admin$'),
                 CallbackQueryHandler(menu, pattern='^back_to_menu$')
             ],
