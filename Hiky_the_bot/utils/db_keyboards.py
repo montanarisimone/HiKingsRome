@@ -53,6 +53,7 @@ class KeyboardBuilder:
         keyboard = [
             [InlineKeyboardButton("Create new hike 🏔️", callback_data='admin_create_hike')],
             [InlineKeyboardButton("Manage existing hikes 📝", callback_data='admin_manage_hikes')],
+            [InlineKeyboardButton("Schedule maintenance 🔧", callback_data='admin_maintenance')],
             [InlineKeyboardButton("Add admin 👑", callback_data='admin_add_admin')],
             [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
         ]
@@ -335,4 +336,49 @@ class KeyboardBuilder:
                 InlineKeyboardButton(difficulty, callback_data=f'difficulty_{difficulty.lower()}')
             ])
         
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def create_maintenance_keyboard(schedules=None):
+        """Create keyboard for maintenance management"""
+        keyboard = []
+        
+        # Add existing maintenance schedules if any
+        if schedules:
+            for schedule in schedules:
+                m_date = schedule['maintenance_date']
+                if isinstance(m_date, str):
+                    m_date = datetime.strptime(m_date, '%Y-%m-%d').strftime('%d/%m/%Y')
+                
+                start = schedule['start_time']
+                if isinstance(start, str):
+                    start = start.split('.')[0]  # Remove microseconds if present
+                    
+                end = schedule['end_time']
+                if isinstance(end, str):
+                    end = end.split('.')[0]  # Remove microseconds if present
+                    
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"📅 {m_date}: {start}-{end}",
+                        callback_data=f"edit_maintenance_{schedule['id']}"
+                    )
+                ])
+        
+        # Add buttons for adding new maintenance or returning
+        keyboard.append([InlineKeyboardButton("➕ Schedule new maintenance", callback_data='add_maintenance')])
+        keyboard.append([InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')])
+        
+        return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def create_maintenance_actions_keyboard(maintenance_id):
+        """Create keyboard for specific maintenance actions"""
+        keyboard = [
+            [InlineKeyboardButton("📝 Edit date", callback_data=f'maintenance_edit_date_{maintenance_id}')],
+            [InlineKeyboardButton("⏰ Edit time", callback_data=f'maintenance_edit_time_{maintenance_id}')],
+            [InlineKeyboardButton("🗒 Edit reason", callback_data=f'maintenance_edit_reason_{maintenance_id}')],
+            [InlineKeyboardButton("❌ Delete", callback_data=f'maintenance_delete_{maintenance_id}')],
+            [InlineKeyboardButton("🔙 Back to maintenance list", callback_data='admin_maintenance')]
+        ]
         return InlineKeyboardMarkup(keyboard)
