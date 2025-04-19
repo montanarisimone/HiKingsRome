@@ -817,7 +817,8 @@ def handle_menu_choice(update, context):
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             query.edit_message_text(
-                "There are no available hikes at the moment."
+                "There are no available hikes at the moment.",
+                reply_markup=reply_markup
             )
             return CHOOSING
         
