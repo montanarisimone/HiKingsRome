@@ -6,9 +6,33 @@ class KeyboardBuilder:
     def create_menu_keyboard():
         """Create the main menu keyboard"""
         keyboard = [
+            [InlineKeyboardButton("Personal Profile 👤", callback_data='personal_profile')],
             [InlineKeyboardButton("Manage Hikes 🏔️", callback_data='manage_hikes')],
             [InlineKeyboardButton("Useful links 🔗", callback_data='links')],
             [InlineKeyboardButton("Make Donation 💖", callback_data='donation')]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def create_profile_keyboard():
+        """Create the profile management keyboard"""
+        keyboard = [
+            [InlineKeyboardButton("View profile info 📋", callback_data='view_profile')],
+            [InlineKeyboardButton("Edit profile 📝", callback_data='edit_profile')],
+            [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def create_edit_profile_keyboard():
+        """Create keyboard for editing profile fields"""
+        keyboard = [
+            [InlineKeyboardButton("Name 📝", callback_data='edit_name')],
+            [InlineKeyboardButton("Surname 📝", callback_data='edit_surname')],
+            [InlineKeyboardButton("Email 📧", callback_data='edit_email')],
+            [InlineKeyboardButton("Phone 📱", callback_data='edit_phone')],
+            [InlineKeyboardButton("Birth Date 📅", callback_data='edit_birth_date')],
+            [InlineKeyboardButton("🔙 Back to profile", callback_data='back_to_profile')]
         ]
         return InlineKeyboardMarkup(keyboard)
 
