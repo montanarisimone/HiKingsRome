@@ -103,6 +103,21 @@ def setup_database():
         FOREIGN KEY (telegram_id) REFERENCES users(telegram_id)
     )
     ''')
+
+    # Create maintenance table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS maintenance (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        maintenance_date DATE NOT NULL,
+        start_time TIME NOT NULL,
+        end_time TIME NOT NULL,
+        reason TEXT,
+        created_by INTEGER,
+        created_on TIMESTAMP,
+        sent_notification BOOLEAN DEFAULT 0,
+        FOREIGN KEY (created_by) REFERENCES users(telegram_id)
+    )
+    ''')
     
     # Commit changes and close connection
     conn.commit()
