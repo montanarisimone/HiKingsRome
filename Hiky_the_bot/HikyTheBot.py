@@ -289,53 +289,89 @@ def view_profile(update, context):
     user_id = query.from_user.id
     profile = DBUtils.get_user_profile(user_id)
     
-    if not profile or not (profile.get('name') or profile.get('surname') or profile.get('email')):
-        # Profile data incomplete or not set
+    if not profile:
         message = (
             "👤 *Your Profile*\n\n"
-            "Your profile is not complete. Please use the 'Edit profile' option to set up your profile information.\n\n"
-            "⚠️ Note: Name, surname, email, phone and birth date are required fields."
+            "An error occurred retrieving your profile. Please try again later."
         )
-
-        # Add button for editing profile
-        keyboard = [
-            [InlineKeyboardButton("📝 Edit profile", callback_data='edit_profile')],
-            [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
-        ]
+        keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
     else:
-        # Format birth date if exists
-        birth_date = profile.get('birth_date', '')
-        if birth_date:
-            try:
-                # Try to convert to display format if stored in database format
-                birth_date = datetime.strptime(birth_date, '%d/%m/%Y').strftime('%d/%m/%Y')
-            except ValueError:
-                # If it's already in display format or another format, use as is
-                pass
-                
-        message = (
-            "👤 *Your Profile*\n\n"
-            f"*Telegram ID:* {profile.get('telegram_id', '')}\n"
-            f"*Username:* @{profile.get('username', '')}\n"
-            f"*Name:* {profile.get('name', 'Not set')}\n"
-            f"*Surname:* {profile.get('surname', 'Not set')}\n"
-            f"*Email:* {profile.get('email', 'Not set')}\n"
-            f"*Phone:* {profile.get('phone', 'Not set')}\n"
-            f"*Birth Date:* {birth_date or 'Not set'}\n"
+        # Check if profile is using default values
+        default_value = 'Not set'
+        is_default = (
+            profile.get('name') == default_value and
+            profile.get('surname') == default_value and
+            profile.get('email') == default_value and
+            profile.get('phone') == default_value and
+            profile.get('birth_date') == default_value
         )
         
-        # Add guide status if applicable
-        if profile.get('is_guide'):
-            message += f"\n*Role:* 👑 Guide"
+        if is_default:
+            # Profile has default values, prompt user to update
+            message = (
+                "👤 *Your Profile*\n\n"
+                "Your profile is not complete. Please use the 'Edit profile' option to set up your profile information.\n\n"
+                "All fields (name, surname, email, phone, birth date) are required for hike registration."
+            )
+            keyboard = [
+                [InlineKeyboardButton("📝 Edit profile", callback_data='edit_profile')],
+                [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)        
+        else:
+            # Format birth date if exists
+            birth_date = profile.get('birth_date', '')
+            if birth_date:
+                try:
+                    # Try to convert to display format if stored in database format
+                    birth_date = datetime.strptime(birth_date, '%d/%m/%Y').strftime('%d/%m/%Y')
+                except ValueError:
+                    # If it's already in display format or another format, use as is
+                    pass
+
+            # Show warning if any fields are still set to default value
+            needs_update = []
+            if profile.get('name') == default_value:
+                needs_update.append('name')
+            if profile.get('surname') == default_value:
+                needs_update.append('surname')
+            if profile.get('email') == default_value:
+                needs_update.append('email')
+            if profile.get('phone') == default_value:
+                needs_update.append('phone')
+            if profile.get('birth_date') == default_value:
+                needs_update.append('birth date')
+            
+            update_warning = ""
+            if needs_update:
+                update_warning = (
+                    f"\n\n⚠️ *Some information needs to be updated:*\n"
+                    f"• {', '.join(needs_update)}\n\n"
+                    f"These fields are required for hike registration."
+                )
+                
+            message = (
+                "👤 *Your Profile*\n\n"
+                f"*Telegram ID:* {profile.get('telegram_id', '')}\n"
+                f"*Username:* @{profile.get('username', '')}\n"
+                f"*Name:* {profile.get('name', 'Not set')}\n"
+                f"*Surname:* {profile.get('surname', 'Not set')}\n"
+                f"*Email:* {profile.get('email', 'Not set')}\n"
+                f"*Phone:* {profile.get('phone', 'Not set')}\n"
+                f"*Birth Date:* {birth_date or 'Not set'}\n"
+            )
+        
+            # Add guide status if applicable
+            if profile.get('is_guide'):
+                message += f"\n*Role:* 👑 Guide"
     
-    # Back to profile menu button
-    keyboard = [
-        [InlineKeyboardButton("📝 Edit profile", callback_data='edit_profile')],
-        [InlineKeyboardButton("🔙 Back to profile menu", callback_data='back_to_profile')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+            # Back to profile menu button
+            keyboard = [
+                [InlineKeyboardButton("📝 Edit profile", callback_data='edit_profile')],
+                [InlineKeyboardButton("🔙 Back to profile menu", callback_data='back_to_profile')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
     
     query.edit_message_text(text=message, parse_mode='Markdown', reply_markup=reply_markup)
     return PROFILE_MENU
@@ -370,6 +406,16 @@ def edit_profile_field(update, context):
         'phone': 'Phone number',
         'birth_date': 'Birth date'
     }
+
+    # Get current value from profile
+    user_id = query.from_user.id
+    profile = DBUtils.get_user_profile(user_id) or {}
+    current_value = profile.get(field, 'Not set')
+    
+    # Don't show 'Not set' as current value
+    current_value_text = ""
+    if current_value != 'Not set':
+        current_value_text = f"Current value: {current_value}\n\n"
     
     if field == 'birth_date':
         query.edit_message_text(
