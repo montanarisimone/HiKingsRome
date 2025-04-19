@@ -293,8 +293,17 @@ def view_profile(update, context):
         # Profile data incomplete or not set
         message = (
             "👤 *Your Profile*\n\n"
-            "Your profile is not complete. Please use the 'Edit profile' option to set up your profile information."
+            "Your profile is not complete. Please use the 'Edit profile' option to set up your profile information.\n\n"
+            "⚠️ Note: Name, surname, email, phone and birth date are required fields."
         )
+
+        # Add button for editing profile
+        keyboard = [
+            [InlineKeyboardButton("📝 Edit profile", callback_data='edit_profile')],
+            [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
     else:
         # Format birth date if exists
         birth_date = profile.get('birth_date', '')
@@ -322,7 +331,10 @@ def view_profile(update, context):
             message += f"\n*Role:* 👑 Guide"
     
     # Back to profile menu button
-    keyboard = [[InlineKeyboardButton("🔙 Back to profile menu", callback_data='back_to_profile')]]
+    keyboard = [
+        [InlineKeyboardButton("📝 Edit profile", callback_data='edit_profile')],
+        [InlineKeyboardButton("🔙 Back to profile menu", callback_data='back_to_profile')]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     query.edit_message_text(text=message, parse_mode='Markdown', reply_markup=reply_markup)
@@ -361,13 +373,13 @@ def edit_profile_field(update, context):
     
     if field == 'birth_date':
         query.edit_message_text(
-            "📅 Select the decade of your birth year:",
+            "📅 Select the decade of your birth year (required):",
             reply_markup=create_year_selector()
         )
         return PROFILE_BIRTH_DATE
     else:
         query.edit_message_text(
-            f"Please enter your {field_names.get(field, field)}:"
+            f"Please enter your {field_names.get(field, field)} (required):"
         )
         
         # Set appropriate state based on field
@@ -383,6 +395,12 @@ def save_profile_name(update, context):
     """Save name from user input"""
     user_id = update.effective_user.id
     name = update.message.text
+
+    if not name.strip():
+        update.message.reply_text(
+            "⚠️ Name cannot be empty. Please enter your name:"
+        )
+        return PROFILE_NAME
     
     # Get current profile data
     profile = DBUtils.get_user_profile(user_id) or {}
@@ -412,6 +430,12 @@ def save_profile_surname(update, context):
     """Save surname from user input"""
     user_id = update.effective_user.id
     surname = update.message.text
+
+    if not surname.strip():
+        update.message.reply_text(
+            "⚠️ Surname cannot be empty. Please enter your surname:"
+        )
+        return PROFILE_SURNAME
     
     # Get current profile data
     profile = DBUtils.get_user_profile(user_id) or {}
@@ -441,6 +465,12 @@ def save_profile_email(update, context):
     """Save email from user input"""
     user_id = update.effective_user.id
     email = update.message.text
+
+    if not email.strip():
+        update.message.reply_text(
+            "⚠️ Email cannot be empty. Please enter your email:"
+        )
+        return PROFILE_EMAIL
     
     # Get current profile data
     profile = DBUtils.get_user_profile(user_id) or {}
@@ -470,6 +500,12 @@ def save_profile_phone(update, context):
     """Save phone number from user input"""
     user_id = update.effective_user.id
     phone = update.message.text
+
+    if not phone.strip():
+        update.message.reply_text(
+            "⚠️ Phone number cannot be empty. Please enter your phone number:"
+        )
+        return PROFILE_PHONE
     
     # Get current profile data
     profile = DBUtils.get_user_profile(user_id) or {}
