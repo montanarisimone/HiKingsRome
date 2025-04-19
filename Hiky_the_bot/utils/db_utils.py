@@ -56,8 +56,18 @@ class DBUtils:
         else:
             # Add new user
             cursor.execute("""
-            INSERT INTO users (telegram_id, username, registration_timestamp, last_updated)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO users (
+                telegram_id, 
+                username, 
+                name,
+                surname,
+                email,
+                phone,
+                birth_date,
+                registration_timestamp, 
+                last_updated
+            )
+            VALUES (?, ?, 'Not set', 'Not set', 'Not set', 'Not set', 'Not set', ?, ?)
             """, (telegram_id, username, now, now))
         
         conn.commit()
