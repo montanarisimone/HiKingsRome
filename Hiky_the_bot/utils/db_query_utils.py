@@ -183,9 +183,7 @@ class DBQueryUtils:
         try:
             with open(DBQueryUtils.CUSTOM_QUERIES_FILE, 'r') as f:
                 return json.load(f)
-        except json.JSONDecodeError:
-            return []
-        except FileNotFoundError:
+        except (json.JSONDecodeError, FileNotFoundError):
             return []
     
     @staticmethod
