@@ -827,24 +827,27 @@ def handle_predefined_query(update, context):
     
     try:
         if query_type == 'query_tables':
-            # Show all tables
+            # Eseguiamo direttamente la query SQL invece di usare get_all_tables
             tables_query = """
             SELECT name FROM sqlite_master 
             WHERE type='table' AND name NOT LIKE 'sqlite_%'
             ORDER BY name
             """
             result = DBQueryUtils.execute_query(tables_query)
+            # Ora query_text è la query SQL effettiva
             query_text = tables_query
+            
         elif query_type == 'query_users':
-            # Show all users
+            # Stessa cosa per la query users
             users_query = """
             SELECT * FROM users
             ORDER BY registration_timestamp DESC
             """
             result = DBQueryUtils.execute_query(users_query)
             query_text = users_query
+            
         elif query_type == 'query_hikes':
-            # Show future hikes
+            # Per coerenza, facciamo lo stesso anche per future hikes
             hikes_query = """
             SELECT 
                 h.id, h.hike_name, h.hike_date, h.max_participants, h.difficulty,
@@ -856,8 +859,9 @@ def handle_predefined_query(update, context):
             """
             result = DBQueryUtils.execute_query(hikes_query)
             query_text = hikes_query
+            
         elif query_type.startswith('query_custom_'):
-            # Handle saved custom query
+            # Il resto del codice rimane invariato
             query_name = query_type.replace('query_custom_', '')
             custom_queries = DBQueryUtils.load_custom_queries()
             saved_query = next((q for q in custom_queries if q['name'] == query_name), None)
@@ -884,32 +888,6 @@ def handle_predefined_query(update, context):
         
         # Format and display results
         return display_query_results(update, context, result, query_text)
-        
-    except Exception as e:
-        logger.error(f"Error in handle_predefined_query: {e}")
-        keyboard = [
-            [InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')],
-            [InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        # Check if it's a timeout error
-        if isinstance(e, TimeoutError) or "timeout" in str(e).lower():
-            query.edit_message_text(
-                "⏱️ *Timeout exceeded*\n\n"
-                "The query execution exceeded the maximum allowed time (5 seconds).\n"
-                "Try to optimize the query or narrow down the results.",
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-        else:
-            # General error
-            query.edit_message_text(
-                f"❌ *Error*\n\n{str(e)}",
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-        return ADMIN_QUERY_DB
 
 def handle_custom_query_request(update, context):
     """Ask for a custom SQL query"""
@@ -1112,7 +1090,8 @@ def start_save_query(update, context):
     query = update.callback_query
     query.answer()
     
-    # Add cancel button
+    # Cambiamo callback_data da 'query_db' a 'predefined_queries'
+    # per tornare al menu delle query predefinite
     keyboard = [[InlineKeyboardButton("🔙 Cancel", callback_data='predefined_queries')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -4354,14 +4333,12 @@ def main():
             ADMIN_QUERY_SAVE: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('cancel', lambda u, c: show_predefined_queries_menu(u, c)),
                 CallbackQueryHandler(show_predefined_queries_menu, pattern='^predefined_queries$'),
                 MessageHandler(Filters.text & ~Filters.command, save_query_text)
             ],
             ADMIN_QUERY_NAME: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('cancel', lambda u, c: show_predefined_queries_menu(u, c)),
                 CallbackQueryHandler(show_predefined_queries_menu, pattern='^predefined_queries$'),
                 MessageHandler(Filters.text & ~Filters.command, save_query_name)
             ],
