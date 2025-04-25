@@ -888,6 +888,17 @@ def handle_predefined_query(update, context):
         
         # Format and display results
         return display_query_results(update, context, result, query_text)
+    except Exception as e:
+        # Aggiungi questo blocco except per gestire le eccezioni
+        logger.error(f"Error in handle_predefined_query: {e}")
+        keyboard = [[InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        query.edit_message_text(
+            f"❌ Error executing query: {str(e)}",
+            reply_markup=reply_markup
+        )
+        return ADMIN_QUERY_DB
 
 def handle_custom_query_request(update, context):
     """Ask for a custom SQL query"""
