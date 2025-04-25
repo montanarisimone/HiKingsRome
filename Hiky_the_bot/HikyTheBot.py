@@ -2970,11 +2970,11 @@ def handle_privacy_choices(update, context):
         try:
             query.edit_message_text(
                 text="🔐 *Privacy Settings*\n\n"
-                     "Basic consent is required and includes:\n"
-                     "• Collection of basic data for registration\n"
-                     "• Emergency contact information\n"
-                     "• Age verification\n\n"
-                     "Optional consents (click to toggle):",
+                "Basic consent is required and includes:\n"
+                "• Collection of basic data for registration\n"
+                "• Emergency contact information\n"
+                "• Age verification\n\n"
+                "Optional consents (click to toggle):",
                 reply_markup=reply_markup,
                 parse_mode='Markdown'
             )
