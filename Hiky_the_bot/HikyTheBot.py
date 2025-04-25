@@ -735,6 +735,512 @@ def handle_save_profile(update, context):
 
 # End def to manage personal profile
 
+# Start def to query db
+def show_query_db_menu(update, context):
+    """Show database query menu for admins"""
+    query = update.callback_query
+    query.answer()
+    
+    # Check if user is admin
+    user_id = query.from_user.id
+    if not DBUtils.check_is_admin(user_id):
+        query.edit_message_text("⚠️ You don't have admin privileges to use this menu.")
+        return CHOOSING
+    
+    # Load custom queries
+    custom_queries = DBQueryUtils.load_custom_queries()
+    
+    # Create keyboard
+    keyboard = [
+        [InlineKeyboardButton("📋 List of tables", callback_data='query_tables')],
+        [InlineKeyboardButton("👥 All users", callback_data='query_users')],
+        [InlineKeyboardButton("🏔️ Future hikes", callback_data='query_hikes')]
+    ]
+    
+    # Add custom queries
+    for query_data in custom_queries:
+        keyboard.append([
+            InlineKeyboardButton(f"📊 {query_data['name']}", callback_data=f"query_custom_{query_data['name']}")
+        ])
+    
+    # Add custom query and manage options
+    keyboard.append([InlineKeyboardButton("✏️ Custom query", callback_data='query_custom')])
+    keyboard.append([InlineKeyboardButton("➕ Save new query", callback_data='query_save')])
+    
+    if custom_queries:
+        keyboard.append([InlineKeyboardButton("❌ Delete saved query", callback_data='query_delete')])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    query.edit_message_text(
+        "🔍 *Database Query Menu*\n\n"
+        "Select a predefined query or write a custom query.\n"
+        "For security reasons, only SELECT queries are allowed.",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_QUERY_DB
+
+def handle_predefined_query(update, context):
+    """Handle predefined query selection"""
+    query = update.callback_query
+    query.answer()
+    
+    query_type = query.data.replace('query_', '')
+    
+    try:
+        if query_type == 'tables':
+            # Show all tables
+            result = DBQueryUtils.get_all_tables()
+            query_text = "List of tables in the database"
+        elif query_type == 'users':
+            # Show all users
+            result = DBQueryUtils.get_all_users()
+            query_text = "SELECT * FROM users ORDER BY registration_timestamp DESC"
+        elif query_type == 'hikes':
+            # Show future hikes
+            result = DBQueryUtils.get_future_hikes()
+            query_text = "Future hikes query"
+        elif query_type.startswith('custom_'):
+            # Handle saved custom query
+            query_name = query_type.replace('custom_', '')
+            custom_queries = DBQueryUtils.load_custom_queries()
+            saved_query = next((q for q in custom_queries if q['name'] == query_name), None)
+            
+            if not saved_query:
+                query.edit_message_text("⚠️ Query not found.")
+                return ADMIN_QUERY_DB
+            
+            result = DBQueryUtils.execute_query(saved_query['query'])
+            query_text = saved_query['query']
+        else:
+            query.edit_message_text("⚠️ Invalid query type.")
+            return ADMIN_QUERY_DB
+        
+        # Format and display results
+        return display_query_results(update, context, result, query_text)
+        
+    except TimeoutError:
+        query.edit_message_text(
+            "⏱️ *Timeout exceeded*\n\n"
+            "The query execution exceeded the maximum allowed time (5 seconds).\n"
+            "Try to optimize the query or narrow down the results.",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')
+            ]])
+        )
+        return ADMIN_QUERY_DB
+    except Exception as e:
+        query.edit_message_text(
+            f"❌ *Error*\n\n{str(e)}",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')
+            ]])
+        )
+        return ADMIN_QUERY_DB
+
+def handle_custom_query_request(update, context):
+    """Ask for a custom SQL query"""
+    query = update.callback_query
+    query.answer()
+    
+    query.edit_message_text(
+        "🔍 *Custom Query*\n\n"
+        "Enter your SQL query.\n\n"
+        "⚠️ *Notes:*\n"
+        "• Only SELECT queries are allowed\n"
+        "• Maximum timeout: 5 seconds\n"
+        "• Maximum 200 rows displayed",
+        parse_mode='Markdown'
+    )
+    return ADMIN_QUERY_EXECUTE
+
+def execute_custom_query(update, context):
+    """Execute the custom query entered by the admin"""
+    sql_query = update.message.text
+    
+    try:
+        # Check and execute query
+        result = DBQueryUtils.execute_query(sql_query)
+        
+        # Format and display results
+        return display_query_results(update, context, result, sql_query)
+        
+    except TimeoutError:
+        keyboard = [[InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        update.message.reply_text(
+            "⏱️ *Timeout exceeded*\n\n"
+            "The query execution exceeded the maximum allowed time (5 seconds).\n"
+            "Try to optimize the query or narrow down the results.",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        return ADMIN_QUERY_DB
+    except Exception as e:
+        keyboard = [[InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        update.message.reply_text(
+            f"❌ *Error*\n\n{str(e)}",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        return ADMIN_QUERY_DB
+
+def display_query_results(update, context, result, query_text):
+    """Format and display query results"""
+    is_callback = isinstance(update.callback_query, CallbackQuery)
+    
+    if not result['success']:
+        error_message = (
+            f"❌ *Error executing query*\n\n"
+            f"{result.get('error', 'Unknown error')}"
+        )
+        
+        keyboard = [[InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if is_callback:
+            update.callback_query.edit_message_text(
+                error_message,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        else:
+            update.message.reply_text(
+                error_message,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        return ADMIN_QUERY_DB
+    
+    # Store query in context for possible save
+    context.user_data['last_query'] = query_text
+    
+    # Add results to context for pagination if needed
+    context.user_data['query_results'] = result
+    
+    # Format results message
+    message = (
+        f"🔍 *Query Results*\n\n"
+        f"```\n{query_text}\n```\n\n"
+    )
+    
+    if result['row_count'] == 0:
+        message += "No results found."
+    else:
+        # Add header with column names
+        header = ' | '.join(result['column_names'])
+        message += f"*Columns:* {header}\n\n"
+        
+        # Format each row
+        for i, row in enumerate(result['rows']):
+            if i >= 10:  # Show only first 10 rows in chat
+                remaining = result['row_count'] - 10
+                message += f"\n_...and {remaining} more results..._"
+                break
+                
+            row_values = []
+            for col in result['column_names']:
+                val = row[col]
+                # Format value for display
+                if val is None:
+                    val = 'NULL'
+                elif isinstance(val, (int, float)):
+                    val = str(val)
+                else:
+                    val = str(val)
+                    if len(val) > 20:
+                        val = val[:17] + '...'
+                row_values.append(val)
+                
+            message += ' | '.join(row_values) + '\n'
+    
+    # Add execution info
+    message += f"\n*Total rows:* {result['row_count']}"
+    if result['hit_limit']:
+        message += f" (limit of {MAX_ROWS} rows reached)"
+    message += f"\n*Execution time:* {result['execution_time']:.3f} seconds"
+    
+    # Add action buttons
+    keyboard = []
+    
+    # Save query option for custom queries
+    if not is_callback or query_text != "List of tables in the database":
+        keyboard.append([InlineKeyboardButton("💾 Save this query", callback_data='save_last_query')])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    try:
+        if is_callback:
+            update.callback_query.edit_message_text(
+                message,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        else:
+            update.message.reply_text(
+                message,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+    except telegram.error.BadRequest as e:
+        # Handle case where message is too long
+        if "Message is too long" in str(e):
+            # Send a simplified message
+            short_message = (
+                f"🔍 *Query Results*\n\n"
+                f"```\n{query_text}\n```\n\n"
+                f"*Total rows:* {result['row_count']}"
+            )
+            if result['hit_limit']:
+                short_message += f" (limit of {MAX_ROWS} rows reached)"
+            short_message += f"\n*Execution time:* {result['execution_time']:.3f} seconds\n\n"
+            short_message += "⚠️ Results are too long to be displayed completely."
+            
+            if is_callback:
+                update.callback_query.edit_message_text(
+                    short_message,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+            else:
+                update.message.reply_text(
+                    short_message,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+    
+    return ADMIN_QUERY_DB
+
+def start_save_query(update, context):
+    """Start the process of saving a new query"""
+    query = update.callback_query
+    
+    if query.data == 'query_save':
+        # User wants to create a new query from scratch
+        query.edit_message_text(
+            "💾 *Save New Query*\n\n"
+            "Enter the SQL query you want to save:",
+            parse_mode='Markdown'
+        )
+        return ADMIN_QUERY_SAVE
+    elif query.data == 'save_last_query':
+        # User wants to save the last executed query
+        if 'last_query' not in context.user_data:
+            query.edit_message_text(
+                "⚠️ No recent query to save.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')
+                ]])
+            )
+            return ADMIN_QUERY_DB
+        
+        # Store the query and ask for a name
+        context.user_data['saving_query'] = context.user_data['last_query']
+        
+        query.edit_message_text(
+            "💾 *Save Query*\n\n"
+            f"Query to save:\n```\n{context.user_data['saving_query']}\n```\n\n"
+            "Enter a name for this query:",
+            parse_mode='Markdown'
+        )
+        return ADMIN_QUERY_NAME
+    
+    return ADMIN_QUERY_DB
+
+def save_query_text(update, context):
+    """Save the query text entered by the admin"""
+    query_text = update.message.text
+    
+    # Validate query
+    if not DBQueryUtils.is_select_query(query_text):
+        update.message.reply_text(
+            "⚠️ Only SELECT queries are allowed for security reasons.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')
+            ]])
+        )
+        return ADMIN_QUERY_DB
+    
+    # Test the query
+    try:
+        result = DBQueryUtils.execute_query(query_text)
+        if not result['success']:
+            update.message.reply_text(
+                f"⚠️ The query is not valid: {result.get('error', 'Unknown error')}",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')
+                ]])
+            )
+            return ADMIN_QUERY_DB
+    except Exception as e:
+        update.message.reply_text(
+            f"⚠️ Error testing query: {str(e)}",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')
+            ]])
+        )
+        return ADMIN_QUERY_DB
+    
+    # Store the query and ask for a name
+    context.user_data['saving_query'] = query_text
+    
+    update.message.reply_text(
+        "💾 *Save Query*\n\n"
+        f"Query to save:\n```\n{query_text}\n```\n\n"
+        "Enter a name for this query:",
+        parse_mode='Markdown'
+    )
+    return ADMIN_QUERY_NAME
+
+def save_query_name(update, context):
+    """Save the query with the given name"""
+    query_name = update.message.text.strip()
+    
+    if not query_name:
+        update.message.reply_text(
+            "⚠️ The name cannot be empty. Enter a name for the query:"
+        )
+        return ADMIN_QUERY_NAME
+    
+    # Check for existing query with the same name
+    custom_queries = DBQueryUtils.load_custom_queries()
+    if any(q['name'] == query_name for q in custom_queries):
+        # Ask for confirmation to overwrite
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Yes, overwrite", callback_data=f'confirm_overwrite_{query_name}'),
+                InlineKeyboardButton("❌ No, change name", callback_data='change_query_name')
+            ],
+            [InlineKeyboardButton("🔙 Cancel", callback_data='query_db')]
+        ]
+        
+        update.message.reply_text(
+            f"⚠️ A query with the name '{query_name}' already exists.\n"
+            "Do you want to overwrite it?",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return ADMIN_QUERY_DB
+    
+    # Save the query
+    DBQueryUtils.save_custom_query(query_name, context.user_data['saving_query'])
+    
+    update.message.reply_text(
+        f"✅ Query '{query_name}' saved successfully!",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')
+        ]])
+    )
+    return ADMIN_QUERY_DB
+
+def start_delete_query(update, context):
+    """Start the process of deleting a saved query"""
+    query = update.callback_query
+    query.answer()
+    
+    # Load custom queries
+    custom_queries = DBQueryUtils.load_custom_queries()
+    
+    if not custom_queries:
+        query.edit_message_text(
+            "⚠️ There are no saved queries to delete.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')
+            ]])
+        )
+        return ADMIN_QUERY_DB
+    
+    # Create keyboard with all saved queries
+    keyboard = []
+    for query_data in custom_queries:
+        keyboard.append([
+            InlineKeyboardButton(f"❌ {query_data['name']}", callback_data=f"delete_query_{query_data['name']}")
+        ])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Cancel", callback_data='query_db')])
+    
+    query.edit_message_text(
+        "❌ *Delete Saved Query*\n\n"
+        "Select the query to delete:",
+        parse_mode='Markdown',
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return ADMIN_QUERY_DELETE
+
+def confirm_delete_query(update, context):
+    """Confirm and process query deletion"""
+    query = update.callback_query
+    query.answer()
+    
+    query_name = query.data.replace('delete_query_', '')
+    
+    # Ask for confirmation
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Yes, delete", callback_data=f'confirm_delete_{query_name}'),
+            InlineKeyboardButton("❌ No, cancel", callback_data='query_db')
+        ]
+    ]
+    
+    query.edit_message_text(
+        f"⚠️ Are you sure you want to delete the query '{query_name}'?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return ADMIN_QUERY_DELETE
+
+def delete_confirmed_query(update, context):
+    """Delete the query after confirmation"""
+    query = update.callback_query
+    query.answer()
+    
+    query_name = query.data.replace('confirm_delete_', '')
+    
+    # Delete the query
+    DBQueryUtils.delete_custom_query(query_name)
+    
+    query.edit_message_text(
+        f"✅ Query '{query_name}' deleted successfully!",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')
+        ]])
+    )
+    return ADMIN_QUERY_DB
+
+def handle_query_overwrite(update, context):
+    """Handle query overwrite confirmation"""
+    query = update.callback_query
+    query.answer()
+    
+    if query.data == 'change_query_name':
+        query.edit_message_text(
+            "💾 *Save Query*\n\n"
+            "Enter a different name for this query:"
+        )
+        return ADMIN_QUERY_NAME
+    
+    query_name = query.data.replace('confirm_overwrite_', '')
+    
+    # Save the query (overwrite)
+    DBQueryUtils.save_custom_query(query_name, context.user_data['saving_query'])
+    
+    query.edit_message_text(
+        f"✅ Query '{query_name}' updated successfully!",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')
+        ]])
+    )
+    return ADMIN_QUERY_DB
+# End def to query db
+
+
 # Start def to manage maintenance
 
 def show_maintenance_menu(update, context):
