@@ -7,17 +7,17 @@ import time
 import threading
 from functools import wraps
 
-# Timeout configurabile per le query (in secondi)
+# Configurable query timeout (in seconds)
 QUERY_TIMEOUT = 5
-# Limite di righe massime per i risultati
+# Maximum number of rows for results
 MAX_ROWS = 200
 
 class TimeoutError(Exception):
-    """Eccezione sollevata quando una query impiega troppo tempo"""
+    """Exception raised when a query takes too long"""
     pass
 
 def timeout(seconds):
-    """Decoratore per impostare un timeout su una funzione"""
+    """Decorator for setting a timeout on a function"""
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -60,7 +60,7 @@ class DBQueryUtils:
     
     @staticmethod
     def is_select_query(query):
-        """Verifica che la query sia di tipo SELECT e non contenga altre operazioni DML"""
+        """Check that the query is of type SELECT and contains no other DML operations"""
         # Rimuovi commenti e spazi bianchi per una migliore analisi
         clean_query = re.sub(r'--.*?\n', ' ', query)
         clean_query = re.sub(r'/\*.*?\*/', ' ', clean_query, flags=re.DOTALL)
@@ -91,7 +91,7 @@ class DBQueryUtils:
         if not DBQueryUtils.is_select_query(query):
             return {
                 'success': False,
-                'error': 'Solo query SELECT sono permesse per motivi di sicurezza.'
+                'error': 'Only SELECT queries are permitted for security reasons.'
             }
         
         conn = None
