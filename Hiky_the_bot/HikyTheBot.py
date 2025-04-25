@@ -4174,6 +4174,7 @@ def main():
                 CallbackQueryHandler(show_maintenance_menu, pattern='^admin_maintenance$'),
                 CallbackQueryHandler(handle_admin_choice, pattern='^confirm_cancel_hike_'),
                 CallbackQueryHandler(handle_admin_choice, pattern='^confirm_reactivate_hike_'),
+                CallbackQueryHandler(show_query_db_menu, pattern='^query_db$'),
                 CallbackQueryHandler(handle_admin_choice, pattern='^back_to_admin$'),
                 CallbackQueryHandler(menu, pattern='^back_to_menu$')
             ],
