@@ -30,6 +30,7 @@ from utils.db_utils import DBUtils
 from utils.db_keyboards import KeyboardBuilder
 from utils.rate_limiter import RateLimiter
 from utils.weather_utils import WeatherUtils
+from utils.db_query_utils import DBQueryUtils
 
 # Load environment variables
 load_dotenv()
@@ -50,7 +51,8 @@ logger.info(f"Using python-telegram-bot version: {telegram.__version__}")
  ADMIN_HIKE_MAX_PARTICIPANTS, ADMIN_HIKE_LOCATION, ADMIN_HIKE_DIFFICULTY,
  ADMIN_HIKE_DESCRIPTION, ADMIN_CONFIRM_HIKE, ADMIN_ADD_ADMIN, DONATION, ADMIN_HIKE_GUIDES,
  PROFILE_MENU, PROFILE_EDIT, PROFILE_NAME, PROFILE_SURNAME, PROFILE_EMAIL,  PROFILE_PHONE, PROFILE_BIRTH_DATE,
- ADMIN_MAINTENANCE, MAINTENANCE_DATE, MAINTENANCE_START_TIME, MAINTENANCE_END_TIME, MAINTENANCE_REASON) = range(42)
+ ADMIN_MAINTENANCE, MAINTENANCE_DATE, MAINTENANCE_START_TIME, MAINTENANCE_END_TIME, MAINTENANCE_REASON,
+ ADMIN_QUERY_DB, ADMIN_QUERY_EXECUTE, ADMIN_QUERY_SAVE, ADMIN_QUERY_DELETE, ADMIN_QUERY_NAME) = range(47)
 
 # Define timezone for Rome (for consistent timestamps)
 rome_tz = pytz.timezone('Europe/Rome')
@@ -1704,6 +1706,9 @@ def handle_admin_choice(update, context):
             reply_markup=reply_markup
         )
         return ADMIN_MENU
+    
+    elif query.data == 'query_db':
+        return show_query_db_menu(update, context)
     
     elif query.data == 'admin_add_admin':
         query.edit_message_text(
@@ -3719,6 +3724,44 @@ def main():
                 CallbackQueryHandler(handle_maintenance_action, pattern='^maintenance_'),
                 CallbackQueryHandler(delete_maintenance_schedule, pattern='^confirm_delete_maintenance_\\d+$'),
                 CallbackQueryHandler(show_maintenance_menu, pattern='^admin_maintenance$'),
+                CallbackQueryHandler(handle_admin_choice, pattern='^back_to_admin$'),
+                CallbackQueryHandler(menu, pattern='^back_to_menu$')
+            ],
+            ADMIN_QUERY_DB: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(show_query_db_menu, pattern='^query_db$'),
+                CallbackQueryHandler(handle_predefined_query, pattern='^query_(tables|users|hikes|custom_.+)$'),
+                CallbackQueryHandler(handle_custom_query_request, pattern='^query_custom$'),
+                CallbackQueryHandler(start_save_query, pattern='^(query_save|save_last_query)$'),
+                CallbackQueryHandler(start_delete_query, pattern='^query_delete$'),
+                CallbackQueryHandler(confirm_delete_query, pattern='^delete_query_.+$'),
+                CallbackQueryHandler(delete_confirmed_query, pattern='^confirm_delete_.+$'),
+                CallbackQueryHandler(handle_query_overwrite, pattern='^(confirm_overwrite_.+|change_query_name)$'),
+                CallbackQueryHandler(handle_admin_choice, pattern='^back_to_admin$'),
+                CallbackQueryHandler(menu, pattern='^back_to_menu$')
+            ],
+            ADMIN_QUERY_EXECUTE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, execute_custom_query)
+            ],
+            ADMIN_QUERY_SAVE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, save_query_text)
+            ],
+            ADMIN_QUERY_NAME: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, save_query_name)
+            ],
+            ADMIN_QUERY_DELETE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(confirm_delete_query, pattern='^delete_query_.+$'),
+                CallbackQueryHandler(delete_confirmed_query, pattern='^confirm_delete_.+$'),
+                CallbackQueryHandler(show_query_db_menu, pattern='^query_db$'),
                 CallbackQueryHandler(handle_admin_choice, pattern='^back_to_admin$'),
                 CallbackQueryHandler(menu, pattern='^back_to_menu$')
             ],
