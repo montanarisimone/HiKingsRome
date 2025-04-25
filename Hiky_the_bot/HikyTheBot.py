@@ -30,7 +30,7 @@ from utils.db_utils import DBUtils
 from utils.db_keyboards import KeyboardBuilder
 from utils.rate_limiter import RateLimiter
 from utils.weather_utils import WeatherUtils
-from utils.db_query_utils import DBQueryUtils
+from utils.db_query_utils import DBQueryUtils,TimeoutError
 
 # Load environment variables
 load_dotenv()
@@ -777,6 +777,7 @@ def show_predefined_queries_menu(update, context):
     """Show predefined queries menu"""
     query = update.callback_query
     query.answer()
+    logger.info("Mostrando menu query predefinite")
     
     # Load custom queries
     custom_queries = DBQueryUtils.load_custom_queries()
@@ -817,24 +818,25 @@ def handle_predefined_query(update, context):
     query = update.callback_query
     query.answer()
     
-    query_type = query.data.replace('query_', '')
+    query_type = query.data
+    logger.info(f"Predefined query selected: {query_type}")
     
     try:
-        if query_type == 'tables':
+        if query_type == 'query_tables':
             # Show all tables
             result = DBQueryUtils.get_all_tables()
             query_text = "List of tables in the database"
-        elif query_type == 'users':
+        elif query_type == 'query_users':
             # Show all users
             result = DBQueryUtils.get_all_users()
             query_text = "SELECT * FROM users ORDER BY registration_timestamp DESC"
-        elif query_type == 'hikes':
+        elif query_type == 'query_hikes':
             # Show future hikes
             result = DBQueryUtils.get_future_hikes()
             query_text = "Future hikes query"
-        elif query_type.startswith('custom_'):
+        elif query_type.startswith('query_custom_'):
             # Handle saved custom query
-            query_name = query_type.replace('custom_', '')
+            query_name = query_type.replace('query_custom_', '')
             custom_queries = DBQueryUtils.load_custom_queries()
             saved_query = next((q for q in custom_queries if q['name'] == query_name), None)
             
@@ -851,7 +853,7 @@ def handle_predefined_query(update, context):
             query_text = saved_query['query']
         else:
             query.edit_message_text(
-                "⚠️ Invalid query type.",
+                f"⚠️ Invalid query type: {query_type}",
                 reply_markup=InlineKeyboardMarkup([[
                     InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')
                 ]])
@@ -862,6 +864,7 @@ def handle_predefined_query(update, context):
         return display_query_results(update, context, result, query_text)
         
     except TimeoutError:
+        logger.error(f"Error in handle_predefined_query: {e}")
         keyboard = [
             [InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')],
             [InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')]
@@ -876,6 +879,7 @@ def handle_predefined_query(update, context):
             reply_markup=reply_markup
         )
         return ADMIN_QUERY_DB
+        
     except Exception as e:
         keyboard = [
             [InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')],
@@ -922,22 +926,8 @@ def execute_custom_query(update, context):
         # Format and display results
         return display_query_results(update, context, result, sql_query)
         
-    except TimeoutError:
-        keyboard = [
-            [InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')],
-            [InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        update.message.reply_text(
-            "⏱️ *Timeout exceeded*\n\n"
-            "The query execution exceeded the maximum allowed time (5 seconds).\n"
-            "Try to optimize the query or narrow down the results.",
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
-        return ADMIN_QUERY_DB
     except Exception as e:
+        logger.error(f"Error in execute_custom_query: {e}")
         keyboard = [
             [InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')],
             [InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')]
@@ -4310,7 +4300,8 @@ def main():
                 CallbackQueryHandler(show_predefined_queries_menu, pattern='^predefined_queries$'),
                 CallbackQueryHandler(handle_predefined_query, pattern='^query_(tables|users|hikes|custom_.+)$'),
                 CallbackQueryHandler(handle_custom_query_request, pattern='^query_custom$'),
-                CallbackQueryHandler(start_save_query, pattern='^(query_save|save_last_query)$'),
+                CallbackQueryHandler(start_save_query, pattern='^query_save$'),
+                CallbackQueryHandler(start_save_query, pattern='^save_last_query$'),
                 CallbackQueryHandler(start_delete_query, pattern='^query_delete$'),
                 CallbackQueryHandler(confirm_delete_query, pattern='^delete_query_.+$'),
                 CallbackQueryHandler(delete_confirmed_query, pattern='^confirm_delete_.+$'),
