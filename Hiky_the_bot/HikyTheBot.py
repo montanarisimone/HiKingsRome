@@ -828,16 +828,24 @@ def handle_predefined_query(update, context):
     try:
         if query_type == 'query_tables':
             # Show all tables
-            result = DBQueryUtils.get_all_tables()
-            query_text = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+            tables_query = """
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name NOT LIKE 'sqlite_%'
+            ORDER BY name
+            """
+            result = DBQueryUtils.execute_query(tables_query)
+            query_text = tables_query
         elif query_type == 'query_users':
             # Show all users
-            result = DBQueryUtils.get_all_users()
-            query_text = "SELECT * FROM users ORDER BY registration_timestamp DESC"
+            users_query = """
+            SELECT * FROM users
+            ORDER BY registration_timestamp DESC
+            """
+            result = DBQueryUtils.execute_query(users_query)
+            query_text = users_query
         elif query_type == 'query_hikes':
             # Show future hikes
-            result = DBQueryUtils.get_future_hikes()
-            query_text = """
+            hikes_query = """
             SELECT 
                 h.id, h.hike_name, h.hike_date, h.max_participants, h.difficulty,
                 h.latitude, h.longitude, h.is_active,
@@ -846,6 +854,8 @@ def handle_predefined_query(update, context):
             WHERE h.hike_date >= date('now')
             ORDER BY h.hike_date ASC
             """
+            result = DBQueryUtils.execute_query(hikes_query)
+            query_text = hikes_query
         elif query_type.startswith('query_custom_'):
             # Handle saved custom query
             query_name = query_type.replace('query_custom_', '')
@@ -1040,12 +1050,15 @@ def display_query_results(update, context, result, query_text):
     # Add action buttons with back to admin menu option
     keyboard = []
     
+    # Determine if this is a predefined query to decide whether to show the save button
+    is_predefined = (
+        "SELECT name FROM sqlite_master" in query_text or
+        "SELECT * FROM users" in query_text or
+        "SELECT \n                h.id, h.hike_name" in query_text
+    )
+    
     # Save query option only for custom queries
-    # Non mostrare il bottone "Save this query" per query predefinite
-    if (not is_callback or 
-        (query_text != "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name" and
-         query_text != "SELECT * FROM users ORDER BY registration_timestamp DESC" and
-         not query_text.strip().startswith("SELECT \n            h.id, h.hike_name"))):
+    if not is_predefined:
         keyboard.append([InlineKeyboardButton("💾 Save this query", callback_data='save_last_query')])
     
     keyboard.append([InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')])
@@ -1100,7 +1113,7 @@ def start_save_query(update, context):
     query.answer()
     
     # Add cancel button
-    keyboard = [[InlineKeyboardButton("🔙 Cancel", callback_data='query_db')]]
+    keyboard = [[InlineKeyboardButton("🔙 Cancel", callback_data='predefined_queries')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     if query.data == 'query_save':
@@ -4317,8 +4330,8 @@ def main():
             ],
             ADMIN_QUERY_DB: [
                 CommandHandler('menu', menu),
-                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
+                CommandHandler('cancel', lambda u, c: show_query_db_menu(u, c)),
                 CallbackQueryHandler(show_query_db_menu, pattern='^query_db$'),
                 CallbackQueryHandler(show_predefined_queries_menu, pattern='^predefined_queries$'),
                 CallbackQueryHandler(handle_predefined_query, pattern='^query_(tables|users|hikes|custom_.+)$'),
@@ -4334,23 +4347,29 @@ def main():
             ADMIN_QUERY_EXECUTE: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
-                CommandHandler('cancel', lambda u, c: show_query_db_menu(u, c)), 
-                CallbackQueryHandler(show_query_db_menu, pattern='^query_db$'), 
+                CommandHandler('cancel', lambda u, c: show_query_db_menu(u, c)),
+                CallbackQueryHandler(show_query_db_menu, pattern='^query_db$'),
                 MessageHandler(Filters.text & ~Filters.command, execute_custom_query)
             ],
             ADMIN_QUERY_SAVE: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
+                CommandHandler('cancel', lambda u, c: show_predefined_queries_menu(u, c)),
+                CallbackQueryHandler(show_predefined_queries_menu, pattern='^predefined_queries$'),
                 MessageHandler(Filters.text & ~Filters.command, save_query_text)
             ],
             ADMIN_QUERY_NAME: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
+                CommandHandler('cancel', lambda u, c: show_predefined_queries_menu(u, c)),
+                CallbackQueryHandler(show_predefined_queries_menu, pattern='^predefined_queries$'),
                 MessageHandler(Filters.text & ~Filters.command, save_query_name)
             ],
             ADMIN_QUERY_DELETE: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
+                CommandHandler('cancel', lambda u, c: show_predefined_queries_menu(u, c)),
+                CallbackQueryHandler(show_predefined_queries_menu, pattern='^predefined_queries$'),
                 CallbackQueryHandler(confirm_delete_query, pattern='^delete_query_.+$'),
                 CallbackQueryHandler(delete_confirmed_query, pattern='^confirm_delete_.+$'),
                 CallbackQueryHandler(show_query_db_menu, pattern='^query_db$'),
