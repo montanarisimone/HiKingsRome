@@ -781,7 +781,7 @@ def show_predefined_queries_menu(update, context):
     """Show predefined queries menu"""
     query = update.callback_query
     query.answer()
-    logger.info("Mostrando menu query predefinite")
+    logger.info("Showing predefined queries menu")
     
     # Load custom queries
     custom_queries = DBQueryUtils.load_custom_queries()
@@ -829,7 +829,7 @@ def handle_predefined_query(update, context):
         if query_type == 'query_tables':
             # Show all tables
             result = DBQueryUtils.get_all_tables()
-            query_text = "List of tables in the database"
+            query_text = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
         elif query_type == 'query_users':
             # Show all users
             result = DBQueryUtils.get_all_users()
@@ -837,7 +837,15 @@ def handle_predefined_query(update, context):
         elif query_type == 'query_hikes':
             # Show future hikes
             result = DBQueryUtils.get_future_hikes()
-            query_text = "Future hikes query"
+            query_text = """
+            SELECT 
+                h.id, h.hike_name, h.hike_date, h.max_participants, h.difficulty,
+                h.latitude, h.longitude, h.is_active,
+                (SELECT COUNT(*) FROM registrations r WHERE r.hike_id = h.id) as current_participants
+            FROM hikes h
+            WHERE h.hike_date >= date('now')
+            ORDER BY h.hike_date ASC
+            """
         elif query_type.startswith('query_custom_'):
             # Handle saved custom query
             query_name = query_type.replace('query_custom_', '')
@@ -867,7 +875,7 @@ def handle_predefined_query(update, context):
         # Format and display results
         return display_query_results(update, context, result, query_text)
         
-    except TimeoutError:
+    except Exception as e:
         logger.error(f"Error in handle_predefined_query: {e}")
         keyboard = [
             [InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')],
@@ -875,27 +883,22 @@ def handle_predefined_query(update, context):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        query.edit_message_text(
-            "⏱️ *Timeout exceeded*\n\n"
-            "The query execution exceeded the maximum allowed time (5 seconds).\n"
-            "Try to optimize the query or narrow down the results.",
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
-        return ADMIN_QUERY_DB
-        
-    except Exception as e:
-        keyboard = [
-            [InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')],
-            [InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        query.edit_message_text(
-            f"❌ *Error*\n\n{str(e)}",
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
+        # Check if it's a timeout error
+        if isinstance(e, TimeoutError) or "timeout" in str(e).lower():
+            query.edit_message_text(
+                "⏱️ *Timeout exceeded*\n\n"
+                "The query execution exceeded the maximum allowed time (5 seconds).\n"
+                "Try to optimize the query or narrow down the results.",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        else:
+            # General error
+            query.edit_message_text(
+                f"❌ *Error*\n\n{str(e)}",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
         return ADMIN_QUERY_DB
 
 def handle_custom_query_request(update, context):
@@ -921,7 +924,7 @@ def handle_custom_query_request(update, context):
 
 def execute_custom_query(update, context):
     """Execute the custom query entered by the admin"""
-    sql_query = update.message.text
+    sql_query = update.message.text.strip()
     
     try:
         # Check and execute query
@@ -938,11 +941,22 @@ def execute_custom_query(update, context):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        update.message.reply_text(
-            f"❌ *Error*\n\n{str(e)}",
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
+        # Check if it's a timeout error
+        if isinstance(e, TimeoutError) or "timeout" in str(e).lower():
+            update.message.reply_text(
+                "⏱️ *Timeout exceeded*\n\n"
+                "The query execution exceeded the maximum allowed time (5 seconds).\n"
+                "Try to optimize the query or narrow down the results.",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        else:
+            # General error
+            update.message.reply_text(
+                f"❌ *Error*\n\n{str(e)}",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
         return ADMIN_QUERY_DB
 
 def display_query_results(update, context, result, query_text):
@@ -1026,8 +1040,12 @@ def display_query_results(update, context, result, query_text):
     # Add action buttons with back to admin menu option
     keyboard = []
     
-    # Save query option for custom queries
-    if not is_callback or query_text != "List of tables in the database":
+    # Save query option only for custom queries
+    # Non mostrare il bottone "Save this query" per query predefinite
+    if (not is_callback or 
+        (query_text != "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name" and
+         query_text != "SELECT * FROM users ORDER BY registration_timestamp DESC" and
+         not query_text.strip().startswith("SELECT \n            h.id, h.hike_name"))):
         keyboard.append([InlineKeyboardButton("💾 Save this query", callback_data='save_last_query')])
     
     keyboard.append([InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')])
@@ -4299,13 +4317,13 @@ def main():
             ],
             ADMIN_QUERY_DB: [
                 CommandHandler('menu', menu),
+                CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(show_query_db_menu, pattern='^query_db$'),
                 CallbackQueryHandler(show_predefined_queries_menu, pattern='^predefined_queries$'),
                 CallbackQueryHandler(handle_predefined_query, pattern='^query_(tables|users|hikes|custom_.+)$'),
                 CallbackQueryHandler(handle_custom_query_request, pattern='^query_custom$'),
-                CallbackQueryHandler(start_save_query, pattern='^query_save$'),
-                CallbackQueryHandler(start_save_query, pattern='^save_last_query$'),
+                CallbackQueryHandler(start_save_query, pattern='^(query_save|save_last_query)$'),
                 CallbackQueryHandler(start_delete_query, pattern='^query_delete$'),
                 CallbackQueryHandler(confirm_delete_query, pattern='^delete_query_.+$'),
                 CallbackQueryHandler(delete_confirmed_query, pattern='^confirm_delete_.+$'),
@@ -4316,6 +4334,8 @@ def main():
             ADMIN_QUERY_EXECUTE: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
+                CommandHandler('cancel', lambda u, c: show_query_db_menu(u, c)), 
+                CallbackQueryHandler(show_query_db_menu, pattern='^query_db$'), 
                 MessageHandler(Filters.text & ~Filters.command, execute_custom_query)
             ],
             ADMIN_QUERY_SAVE: [
