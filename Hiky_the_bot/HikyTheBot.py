@@ -895,7 +895,7 @@ def handle_custom_query_request(update, context):
     query.answer()
     
     # Create cancel button
-    keyboard = [[InlineKeyboardButton("🔙 Cancel", callback_data='query_db')]]
+    keyboard = [[InlineKeyboardButton("🔙 Cancel", callback_data='predefined_queries')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     query.edit_message_text(
