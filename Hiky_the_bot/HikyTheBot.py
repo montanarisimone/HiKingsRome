@@ -35,6 +35,7 @@ from utils.db_keyboards import KeyboardBuilder
 from utils.rate_limiter import RateLimiter
 from utils.weather_utils import WeatherUtils
 from utils.db_query_utils import DBQueryUtils,TimeoutError
+from utils.markdown_utils import escape_markdown
 
 # Load environment variables
 load_dotenv()
@@ -836,7 +837,7 @@ def handle_predefined_query(update, context):
             ORDER BY name
             """
             result = DBQueryUtils.execute_query(tables_query)
-            query_text = tables_query
+            query_text = escape_markdown(tables_query)
             
         elif query_type == 'query_users':
             users_query = """
@@ -844,7 +845,7 @@ def handle_predefined_query(update, context):
             ORDER BY registration_timestamp DESC
             """
             result = DBQueryUtils.execute_query(users_query)
-            query_text = users_query
+            query_text = escape_markdown(users_query)
             
         elif query_type == 'query_hikes':
             hikes_query = """
@@ -857,7 +858,7 @@ def handle_predefined_query(update, context):
             ORDER BY h.hike_date ASC
             """
             result = DBQueryUtils.execute_query(hikes_query)
-            query_text = hikes_query
+            query_text = escape_markdown(hikes_query)
             
         elif query_type.startswith('query_custom_'):
             query_name = query_type.replace('query_custom_', '')
@@ -964,165 +965,130 @@ def execute_custom_query(update, context):
         return ADMIN_QUERY_DB
 
 def display_query_results(update, context, result, query_text):
-    """Format and display query results"""
-    is_callback = isinstance(update.callback_query, CallbackQuery)
-    
-    if not result['success']:
-        error_message = (
-            f"❌ *Error executing query*\n\n"
-            f"{result.get('error', 'Unknown error')}"
-        )
-        
-        keyboard = [
-            [InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')],
-            [InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        if is_callback:
-            update.callback_query.edit_message_text(
-                error_message,
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-        else:
-            update.message.reply_text(
-                error_message,
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-        return ADMIN_QUERY_DB
-    
-    # Store query in context for possible save
-    context.user_data['last_query'] = query_text
-    
-    # Add results to context for pagination if needed
-    context.user_data['query_results'] = result
-    
-    # Format results message
-    message = (
-        f"🔍 *Query Results*\n\n"
-        f"```\n{query_text}\n```\n\n"
-    )
-    
-    if result['row_count'] == 0:
-        message += "No results found."
-    else:
-        # Add header with column names
-        header = ' | '.join(result['column_names'])
-        message += f"*Columns:* {header}\n\n"
-        
-        # Format each row
-        for i, row in enumerate(result['rows']):
-            if i >= 10:  # Show only first 10 rows in chat
-                remaining = result['row_count'] - 10
-                message += f"\n_...and {remaining} more results..._"
-                break
-                
-            row_values = []
-            for col in result['column_names']:
-                val = row[col]
-                # Format value for display
-                if val is None:
-                    val = 'NULL'
-                elif isinstance(val, (int, float)):
-                    val = str(val)
-                else:
-                    val = str(val)
-                    if len(val) > 20:
-                        val = val[:17] + '...'
-                row_values.append(val)
-                
-            message += ' | '.join(row_values) + '\n'
-    
-    # Add execution info
-    message += f"\n*Total rows:* {result['row_count']}"
-    if result['hit_limit']:
-        message += f" (limit of {MAX_ROWS} rows reached)"
-    message += f"\n*Execution time:* {result['execution_time']:.3f} seconds"
-    
-    # Add action buttons with back to admin menu option
-    keyboard = []
-    
-    # Determine if this is a predefined query to decide whether to show the save button
-    is_predefined = (
-        "SELECT name FROM sqlite_master" in query_text or
-        "SELECT * FROM users" in query_text or
-        "SELECT \n                h.id, h.hike_name" in query_text
-    )
-    
-    # Save query option only for custom queries
-    if not is_predefined:
-        keyboard.append([InlineKeyboardButton("💾 Save this query", callback_data='save_last_query')])
-    
-    keyboard.append([InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')])
-    keyboard.append([InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    try:
-        if is_callback:
-            update.callback_query.edit_message_text(
-                message,
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-        else:
-            update.message.reply_text(
-                message,
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-    except telegram.error.BadRequest as e:
-        error_text = str(e)
-        logger.error(f"[ERROR DISPLAYING QUERY RESULTS] {error_text}")
-        
-        if "Message is too long" in error_text:
-            # Gestisci messaggio troppo lungo
-            short_message = (
-                f"🔍 *Query Results*\n\n"
-                f"```\n{query_text}\n```\n\n"
-                f"*Total rows:* {result['row_count']}"
-            )
-            if result['hit_limit']:
-                short_message += f" (limit of {MAX_ROWS} rows reached)"
-            short_message += f"\n*Execution time:* {result['execution_time']:.3f} seconds\n\n"
-            short_message += "⚠️ Results are too long to be displayed completely."
-            
-            if is_callback:
-                update.callback_query.edit_message_text(
-                    short_message,
-                    parse_mode='Markdown',
-                    reply_markup=reply_markup
-                )
-            else:
-                update.message.reply_text(
-                    short_message,
-                    parse_mode='Markdown',
-                    reply_markup=reply_markup
-                )
-        else:
-            # 🔥 Gestisci TUTTI gli altri errori qui
-            fallback_message = (
-                "⚠️ *Error displaying results*\n\n"
-                f"`{error_text}`\n\n"
-                "_Possible causes: invalid Markdown, special characters, or Telegram restrictions._"
-            )
-            
-            if is_callback:
-                update.callback_query.edit_message_text(
-                    fallback_message,
-                    parse_mode='Markdown',
-                    reply_markup=reply_markup
-                )
-            else:
-                update.message.reply_text(
-                    fallback_message,
-                    parse_mode='Markdown',
-                    reply_markup=reply_markup
-                )
+   """Format and display query results safely with Markdown escaping."""
+   is_callback = isinstance(update.callback_query, CallbackQuery)
 
-    
-    return ADMIN_QUERY_DB
+   if not result['success']:
+       error_message = (
+           f"❌ *Error executing query*\n\n"
+           f"{escape_markdown(result.get('error', 'Unknown error'))}"
+       )
+       keyboard = [
+           [InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')],
+           [InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')]
+       ]
+       reply_markup = InlineKeyboardMarkup(keyboard)
+       
+       if is_callback:
+           update.callback_query.edit_message_text(error_message, parse_mode='MarkdownV2', reply_markup=reply_markup)
+       else:
+           update.message.reply_text(error_message, parse_mode='MarkdownV2', reply_markup=reply_markup)
+       return ADMIN_QUERY_DB
+
+   # Store query in context for possible save
+   context.user_data['last_query'] = query_text
+   context.user_data['query_results'] = result
+   
+   # Escape query text for safe display
+   safe_query_text = escape_markdown(query_text)
+
+   # Format results message
+   message = f"🔍 *Query Results*\n\n```\n{safe_query_text}\n```\n\n"
+   
+   if result['row_count'] == 0:
+       message += "No results found."
+   else:
+       # Add header with column names
+       header = ' | '.join([escape_markdown(col) for col in result['column_names']])
+       message += f"*Columns:* {header}\n\n"
+       
+       # Format each row
+       for i, row in enumerate(result['rows']):
+           if i >= 10:  # Show only first 10 rows in chat
+               remaining = result['row_count'] - 10
+               message += f"\n_...and {remaining} more results..._"
+               break
+               
+           row_values = []
+           for col in result['column_names']:
+               val = row[col]
+               # Format value for display
+               if val is None:
+                   val = 'NULL'
+               elif isinstance(val, (int, float)):
+                   val = str(val)
+               else:
+                   val = str(val)
+                   if len(val) > 20:
+                       val = val[:17] + '...'
+               # Escape markdown characters
+               row_values.append(escape_markdown(val))
+               
+           message += ' | '.join(row_values) + '\n'
+   
+   # Add execution info
+   message += f"\n*Total rows:* {result['row_count']}"
+   if result['hit_limit']:
+       message += f" \\(limit of {MAX_ROWS} rows reached\\)"
+   message += f"\n*Execution time:* {result['execution_time']:.3f} seconds"
+   
+   # Add action buttons
+   keyboard = []
+   
+   # Determine if this is a predefined query
+   is_predefined = (
+       "SELECT name FROM sqlite_master" in query_text or
+       "SELECT * FROM users" in query_text or
+       "SELECT \n                h.id, h.hike_name" in query_text
+   )
+   
+   # Save query option only for custom queries
+   if not is_predefined:
+       keyboard.append([InlineKeyboardButton("💾 Save this query", callback_data='save_last_query')])
+   
+   keyboard.append([InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')])
+   keyboard.append([InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')])
+   reply_markup = InlineKeyboardMarkup(keyboard)
+   
+   try:
+       if is_callback:
+           update.callback_query.edit_message_text(
+               message,
+               parse_mode='MarkdownV2',
+               reply_markup=reply_markup
+           )
+       else:
+           update.message.reply_text(
+               message,
+               parse_mode='MarkdownV2',
+               reply_markup=reply_markup
+           )
+   except telegram.error.BadRequest as e:
+       logger.error(f"[ERROR DISPLAYING QUERY RESULTS] {e}")
+       try:
+           # First attempt with a formatted error message
+           fallback_message = (
+               "⚠️ *Error displaying results*\n\n"
+               f"`{escape_markdown(str(e))}`\n\n"
+               "_Possible causes: too much data or invalid characters._"
+           )
+           if is_callback:
+               update.callback_query.edit_message_text(fallback_message, parse_mode='MarkdownV2', reply_markup=reply_markup)
+           else:
+               update.message.reply_text(fallback_message, parse_mode='MarkdownV2', reply_markup=reply_markup)
+       except telegram.error.BadRequest:
+           # If that also fails, try without formatting
+           try:
+               plain_message = "Error displaying results. Try a simpler query or fewer columns."
+               if is_callback:
+                   update.callback_query.edit_message_text(plain_message, reply_markup=reply_markup)
+               else:
+                   update.message.reply_text(plain_message, reply_markup=reply_markup)
+           except telegram.error.BadRequest:
+               # Last resort
+               logger.error("Failed to display query results after multiple attempts")
+   
+   return ADMIN_QUERY_DB
 
 def start_save_query(update, context):
     """Start the process of saving a new query"""
