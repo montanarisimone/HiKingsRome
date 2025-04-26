@@ -993,16 +993,15 @@ def display_query_results(update, context, result, query_text):
     # Escape query text for safe display
     safe_query_text = escape_markdown_v2(query_text)
 
-    # Format results message
-    message = f"🔍 *Query Results*\n\n```{safe_query_text}```\n\n"
     # Escape header columns
     header = ' \\| '.join([escape_markdown_v2(col) for col in result['column_names']])
+    # Format results message
+    message = f"🔍 *Query Results*\n\n```{safe_query_text}```\n\n"
    
     if result['row_count'] == 0:
-        message += "No results found."
+        message += "✅ *Query executed successfully*, but no results were found.\n\n"
     else:
         # Add header with column names
-        header = ' \\| '.join([escape_markdown_v2(col) for col in result['column_names']])
         message += f"*Columns:* {header}\n\n"
        
         # Format each row
