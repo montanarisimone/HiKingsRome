@@ -1000,7 +1000,7 @@ def display_query_results(update, context, result, query_text):
        message += "No results found."
    else:
        # Add header with column names
-       header = ' \\| '.join([escape_markdown_v2(col) for col in result['column_names']])
+       header = ' | '.join([escape_markdown_v2(col) for col in result['column_names']])
        message += f"*Columns:* {header}\n\n"
        
        # Format each row
@@ -1025,7 +1025,7 @@ def display_query_results(update, context, result, query_text):
                # Escape markdown characters
                row_values.append(escape_markdown_v2(val))
                
-           message += ' \\| '.join(row_values) + '\n'
+           message += ' | '.join(row_values) + '\n'
    
    # Add execution info
    message += f"\n*Total rows:* {result['row_count']}"
