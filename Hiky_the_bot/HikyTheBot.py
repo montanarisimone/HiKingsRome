@@ -35,8 +35,7 @@ from utils.db_keyboards import KeyboardBuilder
 from utils.rate_limiter import RateLimiter
 from utils.weather_utils import WeatherUtils
 from utils.db_query_utils import DBQueryUtils,TimeoutError
-from utils.markdown_utils import escape_markdown
-from utils.markdown_utils import escape_markdown_v2
+from utils.markdown_utils import escape_markdown, escape_markdown_v2, escape_preformatted
 
 # Load environment variables
 load_dotenv()
@@ -991,7 +990,7 @@ def display_query_results(update, context, result, query_text):
     context.user_data['query_results'] = result
    
     # Escape query text for safe display
-    safe_query_text = escape_markdown_v2(query_text)
+    safe_query_text = escape_preformatted(query_text)
 
     # Escape header columns
     header = ' \\| '.join([escape_markdown_v2(col) for col in result['column_names']])
