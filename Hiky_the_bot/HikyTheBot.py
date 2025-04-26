@@ -966,39 +966,41 @@ def execute_custom_query(update, context):
         return ADMIN_QUERY_DB
 
 def display_query_results(update, context, result, query_text):
-   """Format and display query results safely with Markdown escaping."""
-   is_callback = isinstance(update.callback_query, CallbackQuery)
+    """Format and display query results safely with Markdown escaping."""
+    is_callback = isinstance(update.callback_query, CallbackQuery)
 
-   if not result['success']:
-       error_message = (
-           f"❌ *Error executing query*\n\n"
-           f"{escape_markdown_v2(result.get('error', 'Unknown error'))}"
-       )
-       keyboard = [
-           [InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')],
-           [InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')]
-       ]
-       reply_markup = InlineKeyboardMarkup(keyboard)
+    if not result['success']:
+        error_message = (
+            f"❌ *Error executing query*\n\n"
+            f"{escape_markdown_v2(result.get('error', 'Unknown error'))}"
+        )
+        keyboard = [
+            [InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')],
+            [InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
        
-       if is_callback:
-           update.callback_query.edit_message_text(error_message, parse_mode='MarkdownV2', reply_markup=reply_markup)
-       else:
-           update.message.reply_text(error_message, parse_mode='MarkdownV2', reply_markup=reply_markup)
-       return ADMIN_QUERY_DB
+        if is_callback:
+            update.callback_query.edit_message_text(error_message, parse_mode='MarkdownV2', reply_markup=reply_markup)
+        else:
+            update.message.reply_text(error_message, parse_mode='MarkdownV2', reply_markup=reply_markup)
+        return ADMIN_QUERY_DB
 
-   # Store query in context for possible save
-   context.user_data['last_query'] = query_text
-   context.user_data['query_results'] = result
+    # Store query in context for possible save
+    context.user_data['last_query'] = query_text
+    context.user_data['query_results'] = result
    
-   # Escape query text for safe display
-   safe_query_text = escape_markdown_v2(query_text)
+    # Escape query text for safe display
+    safe_query_text = escape_markdown_v2(query_text)
 
-   # Format results message
-   message = f"🔍 *Query Results*\n\n```{safe_query_text}```\n\n"
+    # Format results message
+    message = f"🔍 *Query Results*\n\n```{safe_query_text}```\n\n"
+    # Escape header columns
+    header = ' \\| '.join([escape_markdown_v2(col) for col in result['column_names']])
    
-   if result['row_count'] == 0:
-       message += "No results found."
-   else:
+    if result['row_count'] == 0:
+        message += "No results found."
+    else:
        # Add header with column names
        header = ' \\| '.join([escape_markdown_v2(col) for col in result['column_names']])
        message += f"*Columns:* {header}\n\n"
