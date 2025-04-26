@@ -8,10 +8,10 @@ def escape_markdown(text):
     return text
 
 def escape_markdown_v2(text):
-    """Escape Telegram MarkdownV2 special characters."""
+    """Escape Telegram MarkdownV2 special characters correctly."""
     if not isinstance(text, str):
         text = str(text)
     escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
     for char in escape_chars:
-        text = text.replace(char, f'\\{char}')
+        text = text.replace(char, '\\' + char)
     return text
