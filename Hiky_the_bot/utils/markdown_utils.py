@@ -15,3 +15,9 @@ def escape_markdown_v2(text):
     for char in escape_chars:
         text = text.replace(char, '\\' + char)
     return text
+
+def escape_preformatted(text):
+    """Escape text safely for Telegram MarkdownV2 inside a ``` block."""
+    if not isinstance(text, str):
+        text = str(text)
+    return text.replace('\\', '\\\\').replace('`', '\\`')
