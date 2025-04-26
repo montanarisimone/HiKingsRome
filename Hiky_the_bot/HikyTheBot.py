@@ -824,21 +824,23 @@ def handle_predefined_query(update, context):
     
     query_type = query.data
     logger.info(f"Predefined query selected: {query_type}")
+
+    context.chat_data['last_state'] = ADMIN_QUERY_DB
     
     try:
         if query_type == 'query_tables':
-            # Eseguiamo direttamente la query SQL invece di usare get_all_tables
+            # We execute the SQL query directly instead of using get_all_tables
             tables_query = """
             SELECT name FROM sqlite_master 
             WHERE type='table' AND name NOT LIKE 'sqlite_%'
             ORDER BY name
             """
             result = DBQueryUtils.execute_query(tables_query)
-            # Ora query_text è la query SQL effettiva
+            # Now query_text is the actual SQL query
             query_text = tables_query
             
         elif query_type == 'query_users':
-            # Stessa cosa per la query users
+            # Same for the query users
             users_query = """
             SELECT * FROM users
             ORDER BY registration_timestamp DESC
@@ -847,7 +849,7 @@ def handle_predefined_query(update, context):
             query_text = users_query
             
         elif query_type == 'query_hikes':
-            # Per coerenza, facciamo lo stesso anche per future hikes
+            # For consistency, let's do the same for future hikes too
             hikes_query = """
             SELECT 
                 h.id, h.hike_name, h.hike_date, h.max_participants, h.difficulty,
@@ -861,7 +863,6 @@ def handle_predefined_query(update, context):
             query_text = hikes_query
             
         elif query_type.startswith('query_custom_'):
-            # Il resto del codice rimane invariato
             query_name = query_type.replace('query_custom_', '')
             custom_queries = DBQueryUtils.load_custom_queries()
             saved_query = next((q for q in custom_queries if q['name'] == query_name), None)
@@ -889,7 +890,6 @@ def handle_predefined_query(update, context):
         # Format and display results
         return display_query_results(update, context, result, query_text)
     except Exception as e:
-        # Aggiungi questo blocco except per gestire le eccezioni
         logger.error(f"Error in handle_predefined_query: {e}")
         keyboard = [[InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -904,6 +904,8 @@ def handle_custom_query_request(update, context):
     """Ask for a custom SQL query"""
     query = update.callback_query
     query.answer()
+
+    context.chat_data['last_state'] = ADMIN_QUERY_EXECUTE
     
     # Create cancel button
     keyboard = [[InlineKeyboardButton("🔙 Cancel", callback_data='predefined_queries')]]
@@ -1101,8 +1103,7 @@ def start_save_query(update, context):
     query = update.callback_query
     query.answer()
     
-    # Cambiamo callback_data da 'query_db' a 'predefined_queries'
-    # per tornare al menu delle query predefinite
+    # to return to the default query menu
     keyboard = [[InlineKeyboardButton("🔙 Cancel", callback_data='predefined_queries')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
