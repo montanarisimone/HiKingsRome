@@ -1039,15 +1039,30 @@ def display_query_results(update, context, result, query_text):
    # Add action buttons
    keyboard = []
    
-   # Determine if this is a predefined query
-   is_predefined = (
-       "SELECT name FROM sqlite_master" in query_text or
-       "SELECT * FROM users" in query_text or
-       "SELECT \n                h.id, h.hike_name" in query_text
-   )
-   
-   # Save query option only for custom queries
-   if not is_predefined:
+   # Determine if this is a predefined query or a saved query
+   is_predefined_query = False
+
+   # Check for predefined queries by exact match
+   predefined_queries = [
+       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+       "SELECT * FROM users ORDER BY registration_timestamp DESC",
+       "SELECT h.id, h.hike_name, h.hike_date, h.max_participants, h.difficulty, h.latitude, h.longitude, h.is_active, (SELECT COUNT(*) FROM registrations r WHERE r.hike_id = h.id) as current_participants FROM hikes h WHERE h.hike_date >= date('now') ORDER BY h.hike_date ASC"
+   ]
+
+   # Check if the query is one of the predefined ones (normalize whitespace for comparison)
+   normalized_query = ' '.join(query_text.split())
+   for predefined in predefined_queries:
+       normalized_predefined = ' '.join(predefined.split())
+       if normalized_query == normalized_predefined:
+           is_predefined_query = True
+           break
+
+   # Check if this is a user-saved query
+   custom_queries = DBQueryUtils.load_custom_queries()
+   is_saved_query = any(q.get('query', '') == query_text for q in custom_queries)
+
+   # Save query option only for custom queries that aren't already saved
+   if not (is_predefined_query or is_saved_query):
        keyboard.append([InlineKeyboardButton("💾 Save this query", callback_data='save_last_query')])
    
    keyboard.append([InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')])
