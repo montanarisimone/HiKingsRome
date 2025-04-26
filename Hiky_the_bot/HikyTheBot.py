@@ -1001,113 +1001,113 @@ def display_query_results(update, context, result, query_text):
     if result['row_count'] == 0:
         message += "No results found."
     else:
-       # Add header with column names
-       header = ' \\| '.join([escape_markdown_v2(col) for col in result['column_names']])
-       message += f"*Columns:* {header}\n\n"
+        # Add header with column names
+        header = ' \\| '.join([escape_markdown_v2(col) for col in result['column_names']])
+        message += f"*Columns:* {header}\n\n"
        
-       # Format each row
-       for i, row in enumerate(result['rows']):
-           if i >= 10:  # Show only first 10 rows in chat
-               remaining = result['row_count'] - 10
-               message += f"\n_...and {remaining} more results..._"
-               break
+        # Format each row
+        for i, row in enumerate(result['rows']):
+            if i >= 10:  # Show only first 10 rows in chat
+                remaining = result['row_count'] - 10
+                message += f"\n_...and {remaining} more results..._"
+                break
                
-           row_values = []
-           for col in result['column_names']:
-               val = row[col]
-               # Format value for display
-               if val is None:
-                   val = 'NULL'
-               else:
-                   val = str(val)
-                   if len(val) > 20:
-                       val = val[:17] + '...'
-               # Escape markdown characters
-               row_values.append(escape_markdown_v2(val))
+            row_values = []
+            for col in result['column_names']:
+                val = row[col]
+                # Format value for display
+                if val is None:
+                    val = 'NULL'
+                else:
+                    val = str(val)
+                    if len(val) > 20:
+                        val = val[:17] + '...'
+                # Escape markdown characters
+                row_values.append(escape_markdown_v2(val))
                
-           message += ' \\| '.join(row_values) + '\n'
+            message += ' \\| '.join(row_values) + '\n'
    
-   # Add execution info
-   message += f"\n*Total rows:* {result['row_count']}"
-   if result['hit_limit']:
-       message += f" \\(limit of {MAX_ROWS} rows reached\\)"
+    # Add execution info
+    message += f"\n*Total rows:* {result['row_count']}"
+    if result['hit_limit']:
+        message += f" \\(limit of {MAX_ROWS} rows reached\\)"
    
-   # Format and escape execution time
-   exec_time_str = f"{result['execution_time']:.3f}"
-   message += f"\n*Execution time:* {escape_markdown_v2(exec_time_str)} seconds"
+    # Format and escape execution time
+    exec_time_str = f"{result['execution_time']:.3f}"
+    message += f"\n*Execution time:* {escape_markdown_v2(exec_time_str)} seconds"
    
-   # Add action buttons
-   keyboard = []
+    # Add action buttons
+    keyboard = []
    
-   # Determine if this is a predefined query or a saved query
-   is_predefined_query = False
+    # Determine if this is a predefined query or a saved query
+    is_predefined_query = False
 
-   # Check for predefined queries by exact match
-   predefined_queries = [
-       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-       "SELECT * FROM users ORDER BY registration_timestamp DESC",
-       "SELECT h.id, h.hike_name, h.hike_date, h.max_participants, h.difficulty, h.latitude, h.longitude, h.is_active, (SELECT COUNT(*) FROM registrations r WHERE r.hike_id = h.id) as current_participants FROM hikes h WHERE h.hike_date >= date('now') ORDER BY h.hike_date ASC"
-   ]
+    # Check for predefined queries by exact match
+    predefined_queries = [
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        "SELECT * FROM users ORDER BY registration_timestamp DESC",
+        "SELECT h.id, h.hike_name, h.hike_date, h.max_participants, h.difficulty, h.latitude, h.longitude, h.is_active, (SELECT COUNT(*) FROM registrations r WHERE r.hike_id = h.id) as current_participants FROM hikes h WHERE h.hike_date >= date('now') ORDER BY h.hike_date ASC"
+    ]
 
-   # Check if the query is one of the predefined ones (normalize whitespace for comparison)
-   normalized_query = ' '.join(query_text.split())
-   for predefined in predefined_queries:
-       normalized_predefined = ' '.join(predefined.split())
-       if normalized_query == normalized_predefined:
-           is_predefined_query = True
-           break
+    # Check if the query is one of the predefined ones (normalize whitespace for comparison)
+    normalized_query = ' '.join(query_text.split())
+    for predefined in predefined_queries:
+        normalized_predefined = ' '.join(predefined.split())
+        if normalized_query == normalized_predefined:
+            is_predefined_query = True
+            break
 
-   # Check if this is a user-saved query
-   custom_queries = DBQueryUtils.load_custom_queries()
-   is_saved_query = any(q.get('query', '') == query_text for q in custom_queries)
+    # Check if this is a user-saved query
+    custom_queries = DBQueryUtils.load_custom_queries()
+    is_saved_query = any(q.get('query', '') == query_text for q in custom_queries)
 
-   # Save query option only for custom queries that aren't already saved
-   if not (is_predefined_query or is_saved_query):
-       keyboard.append([InlineKeyboardButton("💾 Save this query", callback_data='save_last_query')])
+    # Save query option only for custom queries that aren't already saved
+    if not (is_predefined_query or is_saved_query):
+        keyboard.append([InlineKeyboardButton("💾 Save this query", callback_data='save_last_query')])
    
-   keyboard.append([InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')])
-   keyboard.append([InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')])
-   reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard.append([InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')])
+    keyboard.append([InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')])
+    reply_markup = InlineKeyboardMarkup(keyboard)
    
-   try:
-       if is_callback:
-           update.callback_query.edit_message_text(
-               message,
-               parse_mode='MarkdownV2',
-               reply_markup=reply_markup
-           )
-       else:
-           update.message.reply_text(
-               message,
-               parse_mode='MarkdownV2',
-               reply_markup=reply_markup
-           )
-   except telegram.error.BadRequest as e:
-       logger.error(f"[ERROR DISPLAYING QUERY RESULTS] {e}")
-       try:
-           # First attempt with a formatted error message
-           fallback_message = (
-               "⚠️ *Error displaying results*\n\n"
-               f"`{escape_markdown_v2(str(e))}`\n\n"
-               "_Possible causes: too much data or invalid characters._"
-           )
-           if is_callback:
-               update.callback_query.edit_message_text(fallback_message, parse_mode='MarkdownV2', reply_markup=reply_markup)
-           else:
-               update.message.reply_text(fallback_message, parse_mode='MarkdownV2', reply_markup=reply_markup)
-       except telegram.error.BadRequest:
-           # If that also fails, try without formatting
-           try:
-               plain_message = "Error displaying results. Try a simpler query or fewer columns."
-               if is_callback:
-                   update.callback_query.edit_message_text(plain_message, reply_markup=reply_markup)
-               else:
-                   update.message.reply_text(plain_message, reply_markup=reply_markup)
-           except telegram.error.BadRequest:
-               # Last resort
-               logger.error("Failed to display query results after multiple attempts")
+    try:
+        if is_callback:
+            update.callback_query.edit_message_text(
+                message,
+                parse_mode='MarkdownV2',
+                reply_markup=reply_markup
+            )
+        else:
+            update.message.reply_text(
+                message,
+                parse_mode='MarkdownV2',
+                reply_markup=reply_markup
+            )
+    except telegram.error.BadRequest as e:
+        logger.error(f"[ERROR DISPLAYING QUERY RESULTS] {e}")
+        try:
+            # First attempt with a formatted error message
+            fallback_message = (
+                "⚠️ *Error displaying results*\n\n"
+                f"`{escape_markdown_v2(str(e))}`\n\n"
+                "_Possible causes: too much data or invalid characters._"
+            )
+            if is_callback:
+                update.callback_query.edit_message_text(fallback_message, parse_mode='MarkdownV2', reply_markup=reply_markup)
+            else:
+                update.message.reply_text(fallback_message, parse_mode='MarkdownV2', reply_markup=reply_markup)
+        except telegram.error.BadRequest:
+            # If that also fails, try without formatting
+            try:
+                plain_message = "Error displaying results. Try a simpler query or fewer columns."
+                if is_callback:
+                    update.callback_query.edit_message_text(plain_message, reply_markup=reply_markup)
+                else:
+                    update.message.reply_text(plain_message, reply_markup=reply_markup)
+            except telegram.error.BadRequest:
+                # Last resort
+                logger.error("Failed to display query results after multiple attempts")
    
-   return ADMIN_QUERY_DB
+    return ADMIN_QUERY_DB
 
 def start_save_query(update, context):
     """Start the process of saving a new query"""
