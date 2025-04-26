@@ -887,6 +887,8 @@ def handle_predefined_query(update, context):
         # Saves the query result in the context
         context.user_data['query_result'] = result
         context.user_data['query_text'] = query_text
+
+        logger.info(f"[DEBUG] Result: {result}")
         
         # Call explicitly display_query_results
         return display_query_results(update, context, result, query_text)
@@ -1071,9 +1073,11 @@ def display_query_results(update, context, result, query_text):
                 reply_markup=reply_markup
             )
     except telegram.error.BadRequest as e:
-        # Handle case where message is too long
-        if "Message is too long" in str(e):
-            # Send a simplified message
+        error_text = str(e)
+        logger.error(f"[ERROR DISPLAYING QUERY RESULTS] {error_text}")
+        
+        if "Message is too long" in error_text:
+            # Gestisci messaggio troppo lungo
             short_message = (
                 f"🔍 *Query Results*\n\n"
                 f"```\n{query_text}\n```\n\n"
@@ -1096,6 +1100,27 @@ def display_query_results(update, context, result, query_text):
                     parse_mode='Markdown',
                     reply_markup=reply_markup
                 )
+        else:
+            # 🔥 Gestisci TUTTI gli altri errori qui
+            fallback_message = (
+                "⚠️ *Error displaying results*\n\n"
+                f"`{error_text}`\n\n"
+                "_Possible causes: invalid Markdown, special characters, or Telegram restrictions._"
+            )
+            
+            if is_callback:
+                update.callback_query.edit_message_text(
+                    fallback_message,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+            else:
+                update.message.reply_text(
+                    fallback_message,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+
     
     return ADMIN_QUERY_DB
 
