@@ -1016,8 +1016,6 @@ def display_query_results(update, context, result, query_text):
                # Format value for display
                if val is None:
                    val = 'NULL'
-               elif isinstance(val, (int, float)):
-                   val = str(val)
                else:
                    val = str(val)
                    if len(val) > 20:
