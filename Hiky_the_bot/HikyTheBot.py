@@ -993,12 +993,12 @@ def display_query_results(update, context, result, query_text):
     safe_query_text = escape_preformatted(query_text)
 
     # Escape header columns
-    header = ' \\| '.join([escape_markdown_v2(col) for col in result['column_names']])
+    header = ' \\| '.join([escape_markdown_v2(str(col)) for col in result['column_names']])
     # Format results message
     message = f"🔍 *Query Results*\n\n```{safe_query_text}```\n\n"
    
     if result['row_count'] == 0:
-        message += "✅ *Query executed successfully*, but no results were found.\n\n"
+        message += "✅ *Query executed successfully*, but no results were found\\.\n\n"
     else:
         # Add header with column names
         message += f"*Columns:* {header}\n\n"
@@ -1007,7 +1007,7 @@ def display_query_results(update, context, result, query_text):
         for i, row in enumerate(result['rows']):
             if i >= 10:  # Show only first 10 rows in chat
                 remaining = result['row_count'] - 10
-                message += f"\n_...and {remaining} more results..._"
+                message += f"\n_...and {remaining} more results\\.\\.\\._"
                 break
                
             row_values = []
@@ -1087,7 +1087,7 @@ def display_query_results(update, context, result, query_text):
             fallback_message = (
                 "⚠️ *Error displaying results*\n\n"
                 f"`{escape_markdown_v2(str(e))}`\n\n"
-                "_Possible causes: too much data or invalid characters._"
+                "_Possible causes: too much data or invalid characters\\._"
             )
             if is_callback:
                 update.callback_query.edit_message_text(fallback_message, parse_mode='MarkdownV2', reply_markup=reply_markup)
