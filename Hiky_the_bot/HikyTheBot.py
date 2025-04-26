@@ -824,23 +824,21 @@ def handle_predefined_query(update, context):
     
     query_type = query.data
     logger.info(f"Predefined query selected: {query_type}")
-
+    
+    # Explicitly set the current status
     context.chat_data['last_state'] = ADMIN_QUERY_DB
     
     try:
         if query_type == 'query_tables':
-            # We execute the SQL query directly instead of using get_all_tables
             tables_query = """
             SELECT name FROM sqlite_master 
             WHERE type='table' AND name NOT LIKE 'sqlite_%'
             ORDER BY name
             """
             result = DBQueryUtils.execute_query(tables_query)
-            # Now query_text is the actual SQL query
             query_text = tables_query
             
         elif query_type == 'query_users':
-            # Same for the query users
             users_query = """
             SELECT * FROM users
             ORDER BY registration_timestamp DESC
@@ -849,7 +847,6 @@ def handle_predefined_query(update, context):
             query_text = users_query
             
         elif query_type == 'query_hikes':
-            # For consistency, let's do the same for future hikes too
             hikes_query = """
             SELECT 
                 h.id, h.hike_name, h.hike_date, h.max_participants, h.difficulty,
@@ -886,16 +883,20 @@ def handle_predefined_query(update, context):
                 ]])
             )
             return ADMIN_QUERY_DB
+            
+        # Saves the query result in the context
+        context.user_data['query_result'] = result
+        context.user_data['query_text'] = query_text
         
-        # Format and display results
+        # Call explicitly display_query_results
         return display_query_results(update, context, result, query_text)
     except Exception as e:
-        logger.error(f"Error in handle_predefined_query: {e}")
+        logger.error(f"Error executing predefined query: {e}")
         keyboard = [[InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         query.edit_message_text(
-            f"❌ Error executing query: {str(e)}",
+            f"❌ Error executing query: {str(e)}\n\nTry again or check logs for details.",
             reply_markup=reply_markup
         )
         return ADMIN_QUERY_DB
