@@ -36,6 +36,7 @@ from utils.rate_limiter import RateLimiter
 from utils.weather_utils import WeatherUtils
 from utils.db_query_utils import DBQueryUtils,TimeoutError
 from utils.markdown_utils import escape_markdown
+from utils.markdown_utils import escape_markdown_v2
 
 # Load environment variables
 load_dotenv()
@@ -837,7 +838,7 @@ def handle_predefined_query(update, context):
             ORDER BY name
             """
             result = DBQueryUtils.execute_query(tables_query)
-            query_text = escape_markdown(tables_query)
+            query_text = escape_markdown_v2(tables_query)
             
         elif query_type == 'query_users':
             users_query = """
@@ -845,7 +846,7 @@ def handle_predefined_query(update, context):
             ORDER BY registration_timestamp DESC
             """
             result = DBQueryUtils.execute_query(users_query)
-            query_text = escape_markdown(users_query)
+            query_text = escape_markdown_v2(users_query)
             
         elif query_type == 'query_hikes':
             hikes_query = """
@@ -858,7 +859,7 @@ def handle_predefined_query(update, context):
             ORDER BY h.hike_date ASC
             """
             result = DBQueryUtils.execute_query(hikes_query)
-            query_text = escape_markdown(hikes_query)
+            query_text = escape_markdown_v2(hikes_query)
             
         elif query_type.startswith('query_custom_'):
             query_name = query_type.replace('query_custom_', '')
@@ -971,7 +972,7 @@ def display_query_results(update, context, result, query_text):
    if not result['success']:
        error_message = (
            f"❌ *Error executing query*\n\n"
-           f"{escape_markdown(result.get('error', 'Unknown error'))}"
+           f"{escape_markdown_v2(result.get('error', 'Unknown error'))}"
        )
        keyboard = [
            [InlineKeyboardButton("🔙 Back to query menu", callback_data='query_db')],
@@ -990,7 +991,7 @@ def display_query_results(update, context, result, query_text):
    context.user_data['query_results'] = result
    
    # Escape query text for safe display
-   safe_query_text = escape_markdown(query_text)
+   safe_query_text = escape_markdown_v2(query_text)
 
    # Format results message
    message = f"🔍 *Query Results*\n\n```\n{safe_query_text}\n```\n\n"
@@ -999,7 +1000,7 @@ def display_query_results(update, context, result, query_text):
        message += "No results found."
    else:
        # Add header with column names
-       header = ' | '.join([escape_markdown(col) for col in result['column_names']])
+       header = ' | '.join([escape_markdown_v2(col) for col in result['column_names']])
        message += f"*Columns:* {header}\n\n"
        
        # Format each row
@@ -1022,7 +1023,7 @@ def display_query_results(update, context, result, query_text):
                    if len(val) > 20:
                        val = val[:17] + '...'
                # Escape markdown characters
-               row_values.append(escape_markdown(val))
+               row_values.append(escape_markdown_v2(val))
                
            message += ' | '.join(row_values) + '\n'
    
@@ -1069,7 +1070,7 @@ def display_query_results(update, context, result, query_text):
            # First attempt with a formatted error message
            fallback_message = (
                "⚠️ *Error displaying results*\n\n"
-               f"`{escape_markdown(str(e))}`\n\n"
+               f"`{escape_markdown_v2(str(e))}`\n\n"
                "_Possible causes: too much data or invalid characters._"
            )
            if is_callback:
