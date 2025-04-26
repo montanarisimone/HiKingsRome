@@ -913,7 +913,7 @@ def handle_custom_query_request(update, context):
     context.chat_data['last_state'] = ADMIN_QUERY_EXECUTE
     
     # Create cancel button
-    keyboard = [[InlineKeyboardButton("🔙 Cancel", callback_data='predefined_queries')]]
+    keyboard = [[InlineKeyboardButton("🔙 Cancel", callback_data='cancel_query')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     query.edit_message_text(
@@ -4336,6 +4336,7 @@ def main():
                 CommandHandler('restart', restart),
                 CommandHandler('cancel', lambda u, c: show_query_db_menu(u, c)),
                 CallbackQueryHandler(show_query_db_menu, pattern='^query_db$'),
+                CallbackQueryHandler(show_predefined_queries_menu, pattern='^cancel_query$'),
                 MessageHandler(Filters.text & ~Filters.command, execute_custom_query)
             ],
             ADMIN_QUERY_SAVE: [
