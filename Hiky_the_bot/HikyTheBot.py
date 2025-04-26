@@ -994,7 +994,7 @@ def display_query_results(update, context, result, query_text):
    safe_query_text = escape_markdown_v2(query_text)
 
    # Format results message
-   message = f"🔍 *Query Results*\n\n```\n{safe_query_text}\n```\n\n"
+   message = f"🔍 *Query Results*\n\n```{safe_query_text}```\n\n"
    
    if result['row_count'] == 0:
        message += "No results found."
