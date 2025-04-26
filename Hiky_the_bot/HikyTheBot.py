@@ -1031,7 +1031,10 @@ def display_query_results(update, context, result, query_text):
    message += f"\n*Total rows:* {result['row_count']}"
    if result['hit_limit']:
        message += f" \\(limit of {MAX_ROWS} rows reached\\)"
-   message += f"\n*Execution time:* {result['execution_time']:.3f} seconds"
+   
+   # Format and escape execution time
+   exec_time_str = f"{result['execution_time']:.3f}"
+   message += f"\n*Execution time:* {escape_markdown_v2(exec_time_str)} seconds"
    
    # Add action buttons
    keyboard = []
