@@ -2474,12 +2474,27 @@ def handle_admin_choice(update, context):
         
         status_text = "Active" if is_active else "Cancelled"
         status_emoji = "🟢" if is_active else "🔴"
+
+        # Get the number of guides registered
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+        SELECT COUNT(*) as guide_count FROM registrations r
+        JOIN users u ON r.telegram_id = u.telegram_id
+        WHERE r.hike_id = ? AND u.is_guide = 1
+        """, (hike_id,))
+        guide_result = cursor.fetchone()
+        conn.close()
+        
+        registered_guides = guide_result['guide_count'] if guide_result else 0
+        total_guides = selected_hike.get('guides', 1)  # Default to 1 if not specified
         
         query.edit_message_text(
             f"🏔️ *{selected_hike['hike_name']}*\n\n"
             f"Date: {hike_date}\n"
             f"Status: {status_emoji} {status_text}\n"
             f"Participants: {selected_hike['current_participants']}/{selected_hike['max_participants']}\n"
+            f"Guides: {registered_guides}/{total_guides}\n"
             f"Difficulty: {selected_hike.get('difficulty', 'Not set')}\n\n"
             f"What would you like to do with this hike?",
             parse_mode='Markdown',
@@ -2525,23 +2540,46 @@ def handle_admin_choice(update, context):
         
         # Format date for display
         hike_date = datetime.strptime(selected_hike['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+
+        # Count regular participants (non-guides)
+        regular_participants = sum(1 for p in participants if not p.get('is_guide'))
+        guide_participants = sum(1 for p in participants if p.get('is_guide'))
         
         # Create message with participants info
         message = f"🏔️ *{selected_hike['hike_name']}* - {hike_date}\n"
-        message += f"👥 *Participants: {len(participants)}/{selected_hike['max_participants']}*\n\n"
-        
+        message += f"👥 *Participants: {regular_participants}/{selected_hike['max_participants']}*\n"
+        message += f"👑 *Guides: {guide_participants}/{selected_hike.get('guides', 1)}*\n\n"
+
+        # First list guides
+        guide_count = 0
         for i, p in enumerate(participants, 1):
-            car_sharing = "✅" if p.get('car_sharing') else "❌"
-            message += f"*{i}. {p['name_surname']}*\n"
-            message += f"📱 {p['phone']} | 📧 {p['email']}\n"
-            message += f"📍 {p['location']} | 🚗 Car share: {car_sharing}\n"
-            
-            if p.get('notes'):
-                message += f"📝 Notes: {p['notes']}\n"
-            
-            # Add separator between participants
-            if i < len(participants):
+            if p.get('is_guide'):
+                guide_count += 1
+                message += f"*👑 GUIDE {guide_count}. {p['name_surname']}*\n"
+                message += f"📱 {p['phone']} | 📧 {p['email']}\n"
+                message += f"📍 {p['location']} | 🚗 Car share: {'✅' if p.get('car_sharing') else '❌'}\n"
+                
+                if p.get('notes'):
+                    message += f"📝 Notes: {p['notes']}\n"
+                
+                # Add separator between participants
                 message += "\n" + "—" * 10 + "\n\n"
+        
+        # Then list regular participants
+        reg_count = 0
+        for i, p in enumerate(participants, 1):
+            if not p.get('is_guide'):
+                reg_count += 1
+                message += f"*{reg_count}. {p['name_surname']}*\n"
+                message += f"📱 {p['phone']} | 📧 {p['email']}\n"
+                message += f"📍 {p['location']} | 🚗 Car share: {'✅' if p.get('car_sharing') else '❌'}\n"
+            
+                if p.get('notes'):
+                    message += f"📝 Notes: {p['notes']}\n"
+            
+                # Add separator between participants
+                if reg_count < regular_participants:
+                    message += "\n" + "—" * 10 + "\n\n"
         
         # Create back button
         keyboard = [[InlineKeyboardButton("🔙 Back to hike options", callback_data=f'admin_hike_{hike_id}')]]
