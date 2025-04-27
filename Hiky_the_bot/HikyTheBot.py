@@ -4010,7 +4010,8 @@ def handle_final_choice(update, context):
         
         if success_count == len(selected_hikes):
             query.edit_message_text(
-                "✅ Thanks for signing up for the hike(s)."
+                "✅ Thanks for signing up for the hike(s).",
+                reply_markup=reply_markup
             )
         elif success_count > 0:
             # Some registrations succeeded, some failed
