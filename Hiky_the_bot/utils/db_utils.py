@@ -353,12 +353,15 @@ class DBUtils:
             h.hike_name, 
             h.hike_date, 
             h.max_participants,
+            h.guides,
             h.latitude,
             h.longitude,
             h.difficulty,
             h.description,
             h.is_active,
-            (SELECT COUNT(*) FROM registrations r WHERE r.hike_id = h.id) as current_participants
+            (SELECT COUNT(*) FROM registrations r 
+             JOIN users u ON r.telegram_id = u.telegram_id
+             WHERE r.hike_id = h.id AND u.is_guide = 0) as current_participants
         FROM hikes h
         WHERE 
             h.hike_date BETWEEN ? AND ?
@@ -423,24 +426,43 @@ class DBUtils:
         """Add a new hike registration"""
         conn = DBUtils.get_connection()
         cursor = conn.cursor()
+
+        # Check if user is admin/guide
+        is_admin = DBUtils.check_is_admin(telegram_id)
+        is_guide = False
+
+        if is_admin:
+            # Check if user's profile has guide status
+            cursor.execute("SELECT is_guide FROM users WHERE telegram_id = ?", (telegram_id,))
+            user_info = cursor.fetchone()
+            if user_info and user_info['is_guide'] == 1:
+                is_guide = True
+
+        # First check if spots are available - skip this check for guides
+        if not is_guide:
+            cursor.execute("""
+            SELECT 
+                h.max_participants,
+                (SELECT COUNT(*) FROM registrations r WHERE r.hike_id = h.id) as current_participants
+            FROM hikes h
+            WHERE h.id = ?
+            """, (hike_id,))
         
-        # First check if spots are available
-        cursor.execute("""
-        SELECT 
-            h.max_participants,
-            (SELECT COUNT(*) FROM registrations r WHERE r.hike_id = h.id) as current_participants
-        FROM hikes h
-        WHERE h.id = ?
-        """, (hike_id,))
-        
-        hike_info = cursor.fetchone()
-        if not hike_info:
-            conn.close()
-            return {"success": False, "error": "Hike not found"}
-        
-        if hike_info['current_participants'] >= hike_info['max_participants']:
-            conn.close()
-            return {"success": False, "error": "No spots available"}
+            hike_info = cursor.fetchone()
+            if not hike_info:
+                conn.close()
+                return {"success": False, "error": "Hike not found"}
+            
+            if hike_info['current_participants'] >= hike_info['max_participants']:
+                conn.close()
+                return {"success": False, "error": "No spots available"}
+
+        else:
+            # For guides, just check if the hike exists
+            cursor.execute("SELECT id FROM hikes WHERE id = ?", (hike_id,))
+            if not cursor.fetchone():
+                conn.close()
+                return {"success": False, "error": "Hike not found"}
         
         # Check if user is already registered
         cursor.execute("""
@@ -781,10 +803,12 @@ class DBUtils:
             r.location,
             r.notes,
             r.reminder_preference,
-            r.registration_timestamp
+            r.registration_timestamp,
+            u.is_guide
         FROM registrations r
+        JOIN users u ON r.telegram_id = u.telegram_id
         WHERE r.hike_id = ?
-        ORDER BY r.registration_timestamp ASC
+        ORDER BY u.is_guide DESC, r.registration_timestamp ASC
         """, (hike_id,))
         
         participants = [dict(row) for row in cursor.fetchall()]
