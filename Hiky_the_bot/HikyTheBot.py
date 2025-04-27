@@ -2009,6 +2009,165 @@ def test_telegram_stars(update, context):
         update.message.reply_text(f"Error testing Telegram Stars: {str(e)}")
         return False
 
+# Start handle hikes signup
+def handle_hike_signup(update, context):
+    """Handle initial signup for a hike, checking profile information first"""
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+        
+    # Check hike availability before starting questionnaire
+    available_hikes = DBUtils.get_available_hikes(query.from_user.id)
+    
+    if not available_hikes:
+        keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        query.edit_message_text(
+            "There are no available hikes at the moment.",
+            reply_markup=reply_markup
+        )
+        return CHOOSING
+    
+    # Store available hikes for later use
+    context.user_data['available_hikes'] = available_hikes
+
+    # Check if profile info exists
+    user_id = query.from_user.id
+    profile = DBUtils.get_user_profile(user_id)
+    
+    # Check if profile has all required information
+    has_complete_profile = (
+        profile and
+        profile.get('name') not in [None, '', 'Not set'] and
+        profile.get('surname') not in [None, '', 'Not set'] and
+        profile.get('email') not in [None, '', 'Not set'] and
+        profile.get('phone') not in [None, '', 'Not set'] and
+        profile.get('birth_date') not in [None, '', 'Not set']
+    )
+    
+    if has_complete_profile:
+        # Show profile information and ask for confirmation
+        name_surname = f"{profile.get('name')} {profile.get('surname')}"
+        email = profile.get('email')
+        phone = profile.get('phone')
+        birth_date = profile.get('birth_date')
+        
+        message = (
+            "📋 *Your profile information:*\n\n"
+            f"*Name and surname:* {name_surname}\n"
+            f"*Email:* {email}\n"
+            f"*Phone:* {phone}\n"
+            f"*Birth date:* {birth_date}\n\n"
+            "Is this information correct? If you select 'Yes', you'll continue with the registration. "
+            "If you select 'No', you'll be directed to your profile to update it."
+        )
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("Yes ✅", callback_data='confirm_profile_yes'),
+                InlineKeyboardButton("No ❌", callback_data='confirm_profile_no')
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        query.edit_message_text(
+            message,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        
+        # Store profile info for later use if confirmed
+        context.user_data['profile_info'] = {
+            'name_surname': name_surname,
+            'email': email,
+            'phone': phone,
+            'birth_date': birth_date
+        }
+        
+        return HIKE_CHOICE
+    else:
+        # Profile is incomplete, direct to regular form or profile
+        missing_fields = []
+        if not profile or profile.get('name') in [None, '', 'Not set']:
+            missing_fields.append("name")
+        if not profile or profile.get('surname') in [None, '', 'Not set']:
+            missing_fields.append("surname")
+        if not profile or profile.get('email') in [None, '', 'Not set']:
+            missing_fields.append("email")
+        if not profile or profile.get('phone') in [None, '', 'Not set']:
+            missing_fields.append("phone")
+        if not profile or profile.get('birth_date') in [None, '', 'Not set']:
+            missing_fields.append("birth date")
+            
+        message = (
+            "⚠️ *Your profile is incomplete*\n\n"
+            f"The following information is missing: {', '.join(missing_fields)}.\n\n"
+            "Would you like to update your profile first or continue with the registration form?"
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("Update Profile 📝", callback_data='update_profile_first')],
+            [InlineKeyboardButton("Continue with Form 📋", callback_data='continue_with_form')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        query.edit_message_text(
+            message,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        
+        return HIKE_CHOICE
+
+def handle_profile_confirmation(update, context):
+    """Handle response to profile confirmation question"""
+    query = update.callback_query
+    
+    try:
+        query.answer()
+    except telegram.error.BadRequest as e:
+        if "Query is too old" in str(e) or "Message is not modified" in str(e):
+            return handle_lost_conversation(update, context)
+        raise
+    
+    if query.data == 'confirm_profile_yes':
+        # User confirmed profile information, move to medical conditions
+        context.user_data['name_surname'] = context.user_data['profile_info']['name_surname']
+        context.user_data['email'] = context.user_data['profile_info']['email']
+        context.user_data['phone'] = context.user_data['profile_info']['phone']
+        context.user_data['birth_date'] = context.user_data['profile_info']['birth_date']
+        
+        query.edit_message_text(
+            "🏥 Medical conditions\n"
+            "_Do you have any medical conditions that might create difficulties for you "
+            "(Knee pain, cardiopathy, allergies etc.)?_",
+            parse_mode='Markdown'
+        )
+        return MEDICAL
+    
+    elif query.data == 'confirm_profile_no':
+        # User wants to update profile first
+        return show_profile_menu(update, context)
+    
+    elif query.data == 'update_profile_first':
+        # User wants to update incomplete profile
+        return show_profile_menu(update, context)
+    
+    elif query.data == 'continue_with_form':
+        # User wants to continue with regular form despite incomplete profile
+        query.edit_message_text("👋 Name and surname?")
+        return NAME
+    
+    return HIKE_CHOICE
+
+# End handle hikes signup
+
 def handle_menu_choice(update, context):
     """Handle menu choice selections"""
     query = update.callback_query
@@ -2039,36 +2198,7 @@ def handle_menu_choice(update, context):
         return CHOOSING
     
     elif query.data == 'signup':
-        # Check hike availability before starting questionnaire
-        available_hikes = DBUtils.get_available_hikes(query.from_user.id)
-        
-        if not available_hikes:
-            keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            query.edit_message_text(
-                "There are no available hikes at the moment.",
-                reply_markup=reply_markup
-            )
-            return CHOOSING
-        
-        # Store available hikes for later use
-        context.user_data['available_hikes'] = available_hikes
-
-        # Check if profile info exists to skip name input
-        user_id = query.from_user.id
-        profile = DBUtils.get_user_profile(user_id)
-
-        if profile and profile.get('name') and profile.get('surname'):
-            # Use profile info
-            context.user_data['name_surname'] = f"{profile.get('name')} {profile.get('surname')}"
-            # Skip to email
-            query.edit_message_text("📧 Email?")
-            return EMAIL
-        else:
-            # Ask for name
-            query.edit_message_text("👋 Name and surname?")
-            return NAME
+        return handle_hike_signup(update, context)
     
     elif query.data == 'myhikes':
         return show_my_hikes(query, context)
@@ -4448,6 +4578,7 @@ def main():
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
+                CallbackQueryHandler(handle_profile_confirmation, pattern='^(confirm_profile_yes|confirm_profile_no|update_profile_first|continue_with_form)$'),
                 CallbackQueryHandler(handle_hike)
             ],
             EQUIPMENT: [
