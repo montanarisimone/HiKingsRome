@@ -1,3 +1,6 @@
+# Copyright © 2025 Simone Montanari. All Rights Reserved.
+# This file is part of HiKingsRome and may not be used or distributed without written permission.
+
 def escape_markdown(text):
     """Escape Telegram markdown special characters in a string."""
     if not isinstance(text, str):
