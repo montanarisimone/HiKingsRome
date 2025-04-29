@@ -44,11 +44,7 @@ Our trusty assistant!
   * Comprehensive dashboard for hiking event management
   * Participant list generation with contact details and special requirements
   * Quick communication channels with registered hikers
-
-- **Maintenance Scheduling** 🔧
-  * Advanced planning of bot maintenance periods
-  * Automated notifications to users before and during downtime
-  * Reason documentation and expected resolution times
+  * Built-in SQL query tool for administrators to query the database
 
 - **Reminder System** ⏰
   * Customizable reminders at 5 and/or 2 days before hikes
@@ -63,11 +59,13 @@ Our trusty assistant!
 - **Donation Support** 💖
   * Multiple payment options including Telegram Stars and PayPal
 
-- **Group Membership Verification** 🔐
-  * Seamless integration with Telegram group membership
-  * Real-time verification of community membership status
-  * Automatic invitation links for non-members
+ - **Security & Maintenance** 🔐
+  * Group membership verification
   * Protection of community-exclusive features and information
+  * Advanced planning of bot maintenance periods
+  * Automated notifications to users before and during downtime
+  * Intelligent request throttling to prevent abuse
+  * Smart conversation flow with state management
 
 #### Technology Stack
 
