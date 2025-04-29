@@ -1,3 +1,6 @@
+# Copyright © 2025 Simone Montanari. All Rights Reserved.
+# This file is part of HiKingsRome and may not be used or distributed without written permission.
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from datetime import datetime
 
