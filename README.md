@@ -7,65 +7,67 @@ Welcome to HiKingsRome, where technology meets trails! This is the home of all t
 HiKingsRome is all about helping people escape the city, connect with nature, and enjoy the beautiful landscapes around Rome. To make organizing these adventures smoother, I've built a collection of scripts and tools that do everything from managing Google Sheets to automating tasks with Hiky, our friendly bot.
 
 ## 🛠️ What’s in This Repository?  
-This repo is a mix of scripts, code, and general chaos (but the good kind). Here's what you'll find:
+This repo is a mix of scripts, code, and general chaos (but the good kind). Here's what you'll find...
 
 ### Google Sheets Automations ✨ [Deprecated]  
 A collection of scripts to manage participant data, hike schedules, and all the logistics that keep HiKingsRome running.
 
 ### Hiky the Bot 🤖  
-Our trusty assistant!
+Our trusty digital hiking assistant! Hiky helps manage every aspect of our hiking community.
+
 #### Features
 
 - **Event Registration** 🏔️
-  * Streamlined sign-up process for hiking events with smart form validation
-  * Collects essential information: personal details, medical conditions, equipment status
-  * Customizable reminder preferences for each registration
-  * Automatic spot availability tracking and waitlist management
+  * Streamlined sign-up process with smart form validation
+  * Collection of personal details, medical conditions, equipment status
+  * Customizable reminder preferences
+  * Automatic spot availability tracking
  
 - **Hike Calendar** 📅
-  * Intuitive calendar view with color-coded difficulty levels
-  * Real-time updates on available spots and booking status
-  * Detailed information on meeting points, distance, and elevation
-  * Monthly and upcoming event organization for better planning
+  * Color-coded difficulty levels
+  * Real-time updates on available spots
+  * Details on meeting points, distance, elevation
+  * Monthly overview for better planning
  
 - **Profile Management** 👤
-  * Secure storage of personal information with privacy controls
-  * One-time setup that populates registration forms automatically
-  * Customizable notification and sharing preferences
-  * History of past hikes and upcoming registrations
+  * Secure storage with privacy controls
+  * One-time setup for automatic form population
+  * Customizable notification preferences
+  * History of past and upcoming hikes
 
 - **Weather Forecasts** ☀️
-  * Automated weather predictions for each hike location
-  * Temperature ranges, precipitation probability, and conditions overview
-  * Accuracy indicators based on forecast timeframe
-  * Integration with OpenWeatherMap for reliable data
+  * Automated predictions for hike locations
+  * Temperature, precipitation probability, conditions
+  * Accuracy indicators based on timeframe
+  * OpenWeatherMap API integration
 
 - **Admin Tools** 👑
-  * Comprehensive dashboard for hiking event management
-  * Participant list generation with contact details and special requirements
-  * Quick communication channels with registered hikers
-  * Built-in SQL query tool for administrators to query the database
+  * Comprehensive event management dashboard
+  * Participant lists with contact details
+  * Direct communication channels
+  * Built-in SQL query interface
 
 - **Reminder System** ⏰
-  * Customizable reminders at 5 and/or 2 days before hikes
-  * Essential details included: meeting points, required equipment, weather
-  * Opt-in/opt-out capability for different types of notifications
-  * Special alerts for weather changes or event modifications
+  * Options for 5 and/or 2 days before hikes
+  * Essential details about meeting points, equipment
+  * Opt-in/opt-out preferences
+  * Weather change alerts
 
 - **Car Sharing Coordination** 🚗
-  * Geographic matching of drivers and passengers in similar locations
-  * Environmental impact reduction statistics (wip)
+  * Location-based driver/passenger matching
+  * Environmental impact statistics (WIP)
 
 - **Donation Support** 💖
-  * Multiple payment options including Telegram Stars and PayPal
+  * Telegram Stars and PayPal integration
+  * Support notifications for admins
 
  - **Security & Maintenance** 🔐
   * Group membership verification
-  * Protection of community-exclusive features and information
-  * Advanced planning of bot maintenance periods
-  * Automated notifications to users before and during downtime
-  * Intelligent request throttling to prevent abuse
-  * Smart conversation flow with state management
+  * Protection of exclusive features
+  * Scheduled maintenance management
+  * User notifications for downtime
+  * Request throttling for stability
+  * Smart conversation flow
 
 #### Technology Stack
 
@@ -73,7 +75,7 @@ Our trusty assistant!
 - python-telegram-bot
 - SQLite
 - Google Cloud Platform
-- OpenWeatherMap API (optional)
+- OpenWeatherMap API
 
 #### Project Structure
 
@@ -101,15 +103,25 @@ Because organizing a hiking group can be more exhausting than climbing a mountai
 Also, let’s be clear: I’m not a professional programmer. These scripts were cobbled together with the help of AI (shoutout to [Claude](https://claude.ai/)!) and a whole lot of trial and error. So if you spot some messy code, remember—I’m better at picking hiking trails than writing elegant algorithms.
 
 ## 🖇️ Contributing  
-Feel free to explore, laugh at the code, and contribute if you’d like! Whether you’re here to improve a script, fix a bug, or just get inspired for your own hiking group, you’re welcome to join the journey!
+This bot is specifically designed for the HikingsRome community and is not intended to be repurposed for other hiking groups.
+
+However, we welcome contributions that:
+- Fix bugs or technical issues
+- Enhance existing features
+- Improve code quality and documentation
+- Add new functionality beneficial to HikingsRome members
+
+If you'd like to contribute, feel free to open an issue describing the bug or improvement.
+
+Note that this code is shared for transparency and educational purposes. All rights are reserved, and unauthorized redistribution or reproduction of this bot for other communities is not permitted.
 
 ## Useful links:
-- [Website](https://www.hikingsrome.com/) (wip)
-- [Instagram](https://www.instagram.com/hikingsrome/) (wip)
+- [Website](https://www.hikingsrome.com/) (WIP)
+- [Instagram](https://www.instagram.com/hikingsrome/) (WIP)
 - [Komoot](https://www.komoot.com/it-it/user/3261856743261)
 
 ## Credits
 
-Developed with ❤️ by the Hikings Rome team.
+Developed with ❤️ by the HiKingsRome team.
 
 > *"In the end, coding is like hiking: it requires patience, planning, and the ability to enjoy the journey despite unexpected obstacles."*
