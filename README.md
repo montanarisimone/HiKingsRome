@@ -113,7 +113,7 @@ However, we welcome contributions that:
 
 If you'd like to contribute, feel free to open an issue describing the bug or improvement.
 
-Note that this code is shared for transparency and educational purposes. All rights are reserved, and unauthorized redistribution or reproduction of this bot for other communities is not permitted.
+Note that this code is shared for transparency and educational purposes. All rights are reserved, and unauthorized redistribution or reproduction of this bot for other communities is not permitted. See [LICENSE](LICENSE.md) for details.
 
 ## Useful links:
 - [Website](https://www.hikingsrome.com/) (WIP)
