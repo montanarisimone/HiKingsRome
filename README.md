@@ -61,7 +61,7 @@ Our trusty digital hiking assistant! Hiky helps manage every aspect of our hikin
   * Telegram Stars and PayPal integration
   * Support notifications for admins
 
- - **Security & Maintenance** 🔐
+- **Security & Maintenance** 🔐
   * Group membership verification
   * Protection of exclusive features
   * Scheduled maintenance management
