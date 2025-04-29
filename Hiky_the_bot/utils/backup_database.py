@@ -1,3 +1,6 @@
+# Copyright © 2025 Simone Montanari. All Rights Reserved.
+# This file is part of HiKingsRome and may not be used or distributed without written permission.
+
 #!/usr/bin/env python3
 """
 Backup script for HikyTheBot SQLite database
