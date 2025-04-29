@@ -1,11 +1,13 @@
-Copyright © 2025 [montanarisimone]. All Rights Reserved.
+Copyright © 2025 Simone Montanari. All Rights Reserved.
 
-These script are the intellectual property of the author. It is not permitted to use, copy, distribute, modify, or integrate them, in whole or in part, without prior written authorization from the author.
+The source code and associated files in this repository are the exclusive intellectual property of the author.  
+No part of this code may be used, copied, modified, distributed, sublicensed, or incorporated into other projects, in whole or in part, without the prior **written consent** of the author.
 
-To request permission to use them, please contact:
-Email: [simonemontanar@gmail.com]
-Project Name: [HiKingsRome]
+To request permission, please contact:
 
-Any unauthorized use will be considered a violation of copyright law and will be prosecuted to the fullest extent of applicable law.
+- **Email**: [simonemontanar@gmail.com]
+- **Project**: HiKingsRome
 
-Thank you for respecting the rights of the author.
+Unauthorized use of this software constitutes a violation of applicable copyright laws and may result in legal action.
+
+Thank you for respecting the author's rights.
