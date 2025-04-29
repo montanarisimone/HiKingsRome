@@ -13,17 +13,69 @@ This repo is a mix of scripts, code, and general chaos (but the good kind). Here
 A collection of scripts to manage participant data, hike schedules, and all the logistics that keep HiKingsRome running.
 
 ### Hiky the Bot 🤖  
-Our trusty assistant who:
-  - **Event Registration** - Allows users to sign up for hiking events with personal information, equipment status, and location details.
-  - **Hike Calendar** - Displays upcoming hikes with relevant information such as difficulty, available spots, and dates.
-  - **Profile Management** - Users can create and manage their personal profiles with contact information, preferences, and privacy settings.
-  - **Weather Forecasts** - Provides weather information for upcoming hikes based on location coordinates.
-  - **Admin Tools** - Enables administrators to create, edit, and manage hiking events, including participant tracking.
-  - **Maintenance Scheduling** - Allows administrators to schedule and notify users about bot maintenance periods.
-  - **Reminder System** - Sends automated reminders to participants before hikes (5 days and/or 2 days before events).
-  - **Car Sharing Coordination** - Facilitates car sharing between participants based on their locations and preferences.
-  - **Donation Support** - Offers methods for users to financially support the hiking group's activities.
-  - **Group Membership Verification** - Ensures only registered community members can access the bot's functionality.
+Our trusty assistant!
+#### Features
+
+- **Event Registration** 🏔️
+  * Streamlined sign-up process for hiking events with smart form validation
+  * Collects essential information: personal details, medical conditions, equipment status
+  * Customizable reminder preferences for each registration
+  * Automatic spot availability tracking and waitlist management
+ 
+- **Hike Calendar** 📅
+  * Intuitive calendar view with color-coded difficulty levels
+  * Real-time updates on available spots and booking status
+  * Detailed information on meeting points, distance, and elevation
+  * Monthly and upcoming event organization for better planning
+ 
+- **Profile Management** 👤
+  * Secure storage of personal information with privacy controls
+  * One-time setup that populates registration forms automatically
+  * Customizable notification and sharing preferences
+  * History of past hikes and upcoming registrations
+
+- **Weather Forecasts** ☀️
+  * Automated weather predictions for each hike location
+  * Temperature ranges, precipitation probability, and conditions overview
+  * Accuracy indicators based on forecast timeframe
+  * Integration with OpenWeatherMap for reliable data
+
+- **Admin Tools** 👑
+  * Comprehensive dashboard for hiking event management
+  * Participant list generation with contact details and special requirements
+  * Quick communication channels with registered hikers
+
+- **Maintenance Scheduling** 🔧
+  * Advanced planning of bot maintenance periods
+  * Automated notifications to users before and during downtime
+  * Reason documentation and expected resolution times
+
+- **Reminder System** ⏰
+  * Customizable reminders at 5 and/or 2 days before hikes
+  * Essential details included: meeting points, required equipment, weather
+  * Opt-in/opt-out capability for different types of notifications
+  * Special alerts for weather changes or event modifications
+
+- **Car Sharing Coordination** 🚗
+  * Geographic matching of drivers and passengers in similar locations
+  * Environmental impact reduction statistics (wip)
+
+- **Donation Support** 💖
+  * Multiple payment options including Telegram Stars and PayPal
+
+- **Group Membership Verification** 🔐
+  * Seamless integration with Telegram group membership
+  * Real-time verification of community membership status
+  * Automatic invitation links for non-members
+  * Protection of community-exclusive features and information
+
+#### Technology Stack
+
+- Python 3.8+
+- python-telegram-bot
+- SQLite
+- Google Cloud Platform
+- OpenWeatherMap API (optional)
 
 #### Project Structure
 
