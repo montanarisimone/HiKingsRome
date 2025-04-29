@@ -3,7 +3,7 @@
 
 Welcome to HiKingsRome, where technology meets trails! This is the home of all the scripts, tools, and quirky code powering our hiking group in and around Rome. Whether it’s managing participant lists, automating reminders, or keeping track of the best routes, this repository has it covered.
 
-🌟 What Is HiKingsRome?  
+##🌟 What Is HiKingsRome?  
 HiKingsRome is all about helping people escape the city, connect with nature, and enjoy the beautiful landscapes around Rome. To make organizing these adventures smoother, I've built a collection of scripts and tools that do everything from managing Google Sheets to automating tasks with Hiky, our friendly bot.
 
 🛠️ What’s in This Repository?  
@@ -40,3 +40,9 @@ Useful links:
 - [Website](https://www.hikingsrome.com/) (wip)
 - [Instagram](https://www.instagram.com/hikingsrome/) (wip)
 - [Komoot](https://www.komoot.com/it-it/user/3261856743261)
+
+## Credits
+
+Developed with ❤️ by the Hikings Rome team.
+
+> *"In the end, coding is like hiking: it requires patience, planning, and the ability to enjoy the journey despite unexpected obstacles."*
