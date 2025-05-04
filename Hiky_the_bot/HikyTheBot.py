@@ -1045,9 +1045,12 @@ def handle_edit_cost_settings(update, context):
     # Log the full callback data for debugging
     logger.info(f"Edit costs callback data: {query.data}")
 
-    # Extract the last part by splitting on underscores and getting the last element
-    parts = query.data.split('_')
-    hike_id = int(parts[-1])
+    match = re.search(r'_(\d+)$', callback_query.data)
+    if match:
+        hike_id = int(match.group(1))
+    else:
+        print(f"Errore: callback_data has not a numeric value: {callback_query.data}")
+        return
         
     context.user_data['editing_hike_id'] = hike_id
     
