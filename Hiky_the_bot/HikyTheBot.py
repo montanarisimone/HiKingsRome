@@ -274,12 +274,30 @@ def cmd_admin(update, context):
             "⚠️ You don't have admin privileges to use this command."
         )
         return ConversationHandler.END
+
+    # Get cost summary for dashboard
+    cost_summary = DBUtils.get_cost_summary()
+
+    # Calculate yearly projection
+    total_monthly = next((s['total_amount'] for s in cost_summary if s['frequency'] == 'monthly'), 0)
+    total_quarterly = next((s['total_amount'] for s in cost_summary if s['frequency'] == 'quarterly'), 0)
+    total_yearly = next((s['total_amount'] for s in cost_summary if s['frequency'] == 'yearly'), 0)
+    
+    yearly_projection = (total_monthly * 12) + (total_quarterly * 4) + total_yearly
+
+    # Create admin message with cost dashboard
+    admin_message = (
+        "👑 *Admin Menu*\n\n"
+        "What would you like to manage?\n\n"
+        "💰 *Cost Summary*\n"
+        f"Monthly: {total_monthly}€\n"
+        f"Yearly projection: {yearly_projection}€\n"
+    )
     
     reply_markup = KeyboardBuilder.create_admin_keyboard()
     
     update.message.reply_text(
-        "👑 *Admin Menu*\n\n"
-        "What would you like to manage?",
+        admin_message,
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
