@@ -385,29 +385,69 @@ class DBUtils:
         now = datetime.now(rome_tz).strftime("%Y-%m-%d %H:%M:%S")
         
         try:
-            cursor.execute("""
+            # First you get the current cost data
+            cursor.execute("SELECT * FROM fixed_costs WHERE id = ?", (cost_id,))
+            current_cost = cursor.fetchone()
+            
+            if not current_cost:
+                conn.close()
+                return {"success": False, "error": "Cost not found"}
+
+            # Prepare fields to be updated
+            fields_to_update = []
+            params = []
+
+            # Update only fields that have been specified
+            if 'name' in cost_data and cost_data['name'] is not None:
+                fields_to_update.append("name = ?")
+                params.append(cost_data['name'])
+                
+            if 'amount' in cost_data and cost_data['amount'] is not None:
+                fields_to_update.append("amount = ?")
+                params.append(cost_data['amount'])
+                
+            if 'frequency' in cost_data and cost_data['frequency'] is not None:
+                fields_to_update.append("frequency = ?")
+                params.append(cost_data['frequency'])
+                
+            if 'description' in cost_data and cost_data['description'] is not None:
+                fields_to_update.append("description = ?")
+                params.append(cost_data['description'])
+
+            # Always add timestamp update
+            fields_to_update.append("last_updated = ?")
+            params.append(now)
+
+            # Add the cost ID to the end of the parameters
+            params.append(cost_id)
+
+            # If there are no fields to update, exit
+            if not fields_to_update:
+                conn.close()
+                return {"success": True, "message": "No fields to update"}
+
+            # Construct query
+            query = f"""
             UPDATE fixed_costs
-            SET 
-                name = ?,
-                amount = ?,
-                frequency = ?,
-                description = ?,
-                last_updated = ?
+            SET {', '.join(fields_to_update)}
             WHERE id = ?
-            """, (
-                cost_data.get('name'),
-                cost_data.get('amount'),
-                cost_data.get('frequency'),
-                cost_data.get('description'),
-                now,
-                cost_id
-            ))
+            """
+            
+            logger.info(f"Update Query: {query}")
+            logger.info(f"Parameters: {params}")
+
+            cursor.execute(query, params)
             
             conn.commit()
             conn.close()
             return {"success": True}
             
         except sqlite3.Error as e:
+            logger.error(f"Error SQL in update_fixed_cost: {e}")
+            conn.close()
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"General error in update_fixed_cost: {e}")
             conn.close()
             return {"success": False, "error": str(e)}
     
