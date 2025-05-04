@@ -386,3 +386,56 @@ class KeyboardBuilder:
             [InlineKeyboardButton("🔙 Back to maintenance list", callback_data='admin_maintenance')]
         ]
         return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def create_cost_control_keyboard(costs=None):
+        """Create keyboard for cost control management"""
+        keyboard = []
+        
+        # Add existing costs if any
+        if costs:
+            for cost in costs:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"{cost['name']} - {cost['amount']}€ ({cost['frequency']})",
+                        callback_data=f"edit_cost_{cost['id']}"
+                    )
+                ])
+        
+        # Add buttons for adding new cost or returning
+        keyboard.append([InlineKeyboardButton("➕ Add new fixed cost", callback_data='add_cost')])
+        keyboard.append([InlineKeyboardButton("📊 View cost summary", callback_data='cost_summary')])
+        keyboard.append([InlineKeyboardButton("🔙 Back to admin menu", callback_data='back_to_admin')])
+        
+        return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def create_cost_actions_keyboard(cost_id):
+        """Create keyboard for specific cost actions"""
+        keyboard = [
+            [InlineKeyboardButton("📝 Edit name", callback_data=f'cost_edit_name_{cost_id}')],
+            [InlineKeyboardButton("💰 Edit amount", callback_data=f'cost_edit_amount_{cost_id}')],
+            [InlineKeyboardButton("🔄 Edit frequency", callback_data=f'cost_edit_frequency_{cost_id}')],
+            [InlineKeyboardButton("🗒 Edit description", callback_data=f'cost_edit_description_{cost_id}')],
+            [InlineKeyboardButton("❌ Delete", callback_data=f'cost_delete_{cost_id}')],
+            [InlineKeyboardButton("🔙 Back to cost list", callback_data='admin_costs')]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def create_frequency_keyboard(cost_id):
+        """Create keyboard for selecting cost frequency"""
+        frequencies = ["Monthly", "Quarterly", "Yearly"]
+        keyboard = []
+        
+        for frequency in frequencies:
+            keyboard.append([
+                InlineKeyboardButton(
+                    frequency, 
+                    callback_data=f'frequency_{frequency.lower()}_{cost_id}'
+                )
+            ])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Cancel", callback_data=f'edit_cost_{cost_id}')])
+        
+        return InlineKeyboardMarkup(keyboard)
