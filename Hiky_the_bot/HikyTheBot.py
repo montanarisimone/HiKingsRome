@@ -1041,8 +1041,26 @@ def handle_edit_cost_settings(update, context):
 
     logger.info(f"Edit costs callback data: {query.data}")
     logger.info(f"Split result: {query.data.split('_')}")
-    
-    hike_id = int(query.data.split('_')[-1])
+
+    match = re.search(r'admin_edit_costs_(\d+)', query.data)
+    if match:
+        hike_id = int(match.group(1))
+        logger.info(f"Extracted hike_id using regex: {hike_id}")
+    else:
+        parts = query.data.split('_')
+        logger.info(f"Split parts: {parts}")
+
+        # Find the last part (a number)
+        for part in reversed(parts):
+            if part.isdigit():
+                hike_id = int(part)
+                logger.info(f"Found hike_id in parts: {hike_id}")
+                break
+        else:
+            logger.error(f"Could not extract hike_id from {query.data}")
+            query.edit_message_text("Errore nell'identificazione dell'escursione.")
+            return ADMIN_MENU
+        
     context.user_data['editing_hike_id'] = hike_id
     
     # Get hike details
