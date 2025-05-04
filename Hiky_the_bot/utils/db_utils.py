@@ -766,10 +766,12 @@ class DBUtils:
                 longitude,
                 difficulty,
                 description,
+                variable_costs,
+                fixed_cost_coverage,
+                max_cost_per_participant,
                 created_by,
-                is_active,
-                variable_costs
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+                is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
             """, (
                 hike_data.get('hike_name', ''),
                 hike_data.get('hike_date', ''),
@@ -779,8 +781,10 @@ class DBUtils:
                 hike_data.get('longitude'),
                 hike_data.get('difficulty', ''),
                 hike_data.get('description', ''),
-                created_by,
-                hike_data.get('variable_costs', 0)
+                hike_data.get('variable_costs', 0),
+                hike_data.get('fixed_cost_coverage', 0.5),  # Default 50%
+                hike_data.get('max_cost_per_participant', 0),  # Default no maximum
+                created_by
             ))
             
             hike_id = cursor.lastrowid
@@ -813,7 +817,10 @@ class DBUtils:
                 latitude = ?,
                 longitude = ?,
                 difficulty = ?,
-                description = ?
+                description = ?,
+                variable_costs = ?,
+                fixed_cost_coverage = ?,
+                max_cost_per_participant = ?
             WHERE id = ?
             """, (
                 hike_data.get('hike_name'),
@@ -823,6 +830,9 @@ class DBUtils:
                 hike_data.get('longitude'),
                 hike_data.get('difficulty'),
                 hike_data.get('description'),
+                hike_data.get('variable_costs', 0),
+                hike_data.get('fixed_cost_coverage', 0.5),
+                hike_data.get('max_cost_per_participant', 0),
                 hike_id
             ))
             
