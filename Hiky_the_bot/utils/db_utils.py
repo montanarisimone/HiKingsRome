@@ -511,6 +511,339 @@ class DBUtils:
         return summary
     
     @staticmethod
+    def calculate_dynamic_fees(hike_id, admin_id):
+        """
+        Calculate the final fees based on actual attendance
+        
+        Args:
+            hike_id: ID of the hike to calculate fees for
+            admin_id: ID of the admin making the change
+            
+        Returns:
+            dict: Success flag and fee calculation results
+        """
+        # Check if admin
+        if not DBUtils.check_is_admin(admin_id):
+            return {"success": False, "error": "Admin privileges required"}
+        
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Get hike details
+            cursor.execute("""
+            SELECT 
+                h.id, 
+                h.hike_name, 
+                h.max_participants,
+                h.guides,
+                h.variable_costs,
+                h.fixed_cost_coverage,
+                h.max_cost_per_participant,
+                h.actual_attendance,
+                h.fee_locked,
+                (SELECT COUNT(*) FROM registrations r 
+                 JOIN users u ON r.telegram_id = u.telegram_id
+                 WHERE r.hike_id = h.id AND u.is_guide = 0) as registered_participants,
+                (SELECT COUNT(*) FROM registrations r 
+                 JOIN users u ON r.telegram_id = u.telegram_id
+                 WHERE r.hike_id = h.id AND u.is_guide = 1) as registered_guides
+            FROM hikes h
+            WHERE h.id = ?
+            """, (hike_id,))
+            
+            hike = cursor.fetchone()
+            if not hike:
+                conn.close()
+                return {"success": False, "error": "Hike not found"}
+            
+            # Convert to dict
+            hike_data = dict(hike)
+            
+            # If fee is already locked, return current values
+            if hike_data.get('fee_locked'):
+                cursor.execute("""
+                SELECT final_participant_fee, final_guide_fee
+                FROM hikes
+                WHERE id = ?
+                """, (hike_id,))
+                
+                fees = cursor.fetchone()
+                if fees:
+                    conn.close()
+                    return {
+                        "success": True, 
+                        "participant_fee": fees['final_participant_fee'],
+                        "guide_fee": fees['final_guide_fee'],
+                        "is_locked": True
+                    }
+            
+            # Get actual attendance if available, otherwise use registered participants
+            actual_attendance = hike_data.get('actual_attendance', 0)
+            if actual_attendance <= 0:
+                # Count attendance confirmations
+                cursor.execute("""
+                SELECT COUNT(*) as count
+                FROM attendance
+                WHERE hike_id = ? AND attended = 1
+                """, (hike_id,))
+                
+                attendance_count = cursor.fetchone()
+                if attendance_count and attendance_count['count'] > 0:
+                    actual_attendance = attendance_count['count']
+                else:
+                    # Fall back to registered participants
+                    actual_attendance = hike_data.get('registered_participants', 0)
+            
+            # Get registered guides
+            registered_guides = hike_data.get('registered_guides', 0)
+            if registered_guides <= 0:
+                registered_guides = hike_data.get('guides', 1)  # Default to planned guides
+                
+            # Calculate the monthly fixed costs
+            monthly_fixed_costs = DBUtils.get_monthly_fixed_costs()
+            
+            # Calculate fees based on actual attendance
+            variable_costs = hike_data.get('variable_costs', 0)
+            fixed_cost_coverage = hike_data.get('fixed_cost_coverage', 0.5)
+            max_cost_per_participant = hike_data.get('max_cost_per_participant', 0)
+            
+            # Guide fee calculation
+            guide_fee = 0
+            if actual_attendance + registered_guides > 0:
+                guide_fee = variable_costs / (actual_attendance + registered_guides)
+                
+            # Participant fee calculation
+            participant_fee = guide_fee  # Start with the guide fee portion
+            if actual_attendance > 0:
+                fixed_cost_portion = (fixed_cost_coverage * monthly_fixed_costs) / actual_attendance
+                participant_fee += fixed_cost_portion
+                
+            # Apply maximum cost cap if set
+            if max_cost_per_participant > 0 and participant_fee > max_cost_per_participant:
+                participant_fee = max_cost_per_participant
+                
+            conn.close()
+            
+            return {
+                "success": True,
+                "participant_fee": participant_fee,
+                "guide_fee": guide_fee,
+                "actual_attendance": actual_attendance,
+                "registered_guides": registered_guides,
+                "is_locked": False
+            }
+                
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def lock_fees(hike_id, admin_id, participant_fee, guide_fee):
+        """
+        Lock the fees for a hike at specific values
+        
+        Args:
+            hike_id: ID of the hike
+            admin_id: ID of the admin making the change
+            participant_fee: Final fee for participants
+            guide_fee: Final fee for guides
+            
+        Returns:
+            dict: Success flag and result message
+        """
+        # Check if admin
+        if not DBUtils.check_is_admin(admin_id):
+            return {"success": False, "error": "Admin privileges required"}
+        
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Update the hike with final fees
+            cursor.execute("""
+            UPDATE hikes
+            SET 
+                fee_locked = 1,
+                final_participant_fee = ?,
+                final_guide_fee = ?
+            WHERE id = ?
+            """, (
+                participant_fee,
+                guide_fee,
+                hike_id
+            ))
+            
+            conn.commit()
+            conn.close()
+            return {"success": True}
+                
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def unlock_fees(hike_id, admin_id):
+        """
+        Unlock the fees for a hike
+        
+        Args:
+            hike_id: ID of the hike
+            admin_id: ID of the admin making the change
+            
+        Returns:
+            dict: Success flag and result message
+        """
+        # Check if admin
+        if not DBUtils.check_is_admin(admin_id):
+            return {"success": False, "error": "Admin privileges required"}
+        
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Update the hike to unlock fees
+            cursor.execute("""
+            UPDATE hikes
+            SET 
+                fee_locked = 0,
+                final_participant_fee = 0,
+                final_guide_fee = 0
+            WHERE id = ?
+            """, (hike_id,))
+            
+            conn.commit()
+            conn.close()
+            return {"success": True}
+                
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def update_actual_attendance(hike_id, admin_id, attendance_count):
+        """
+        Update the actual attendance for a hike
+        
+        Args:
+            hike_id: ID of the hike
+            admin_id: ID of the admin making the change
+            attendance_count: Number of participants who attended
+            
+        Returns:
+            dict: Success flag and result message
+        """
+        # Check if admin
+        if not DBUtils.check_is_admin(admin_id):
+            return {"success": False, "error": "Admin privileges required"}
+        
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Validate attendance count
+            if attendance_count < 0:
+                conn.close()
+                return {"success": False, "error": "Attendance count cannot be negative"}
+            
+            # Update the hike with actual attendance
+            cursor.execute("""
+            UPDATE hikes
+            SET actual_attendance = ?
+            WHERE id = ?
+            """, (
+                attendance_count,
+                hike_id
+            ))
+            
+            conn.commit()
+            conn.close()
+            return {"success": True}
+                
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def record_attendance(hike_id, telegram_id, attended):
+        """
+        Record attendance for a participant
+        
+        Args:
+            hike_id: ID of the hike
+            telegram_id: ID of the participant
+            attended: Boolean indicating if they attended
+            
+        Returns:
+            dict: Success flag and result message
+        """
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Get registration ID
+            cursor.execute("""
+            SELECT id FROM registrations
+            WHERE telegram_id = ? AND hike_id = ?
+            """, (telegram_id, hike_id))
+            
+            registration = cursor.fetchone()
+            if not registration:
+                conn.close()
+                return {"success": False, "error": "Registration not found"}
+            
+            registration_id = registration['id']
+            now = datetime.now(rome_tz).strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Check if attendance record exists
+            cursor.execute("""
+            SELECT id FROM attendance
+            WHERE registration_id = ?
+            """, (registration_id,))
+            
+            attendance_record = cursor.fetchone()
+            
+            if attendance_record:
+                # Update existing record
+                cursor.execute("""
+                UPDATE attendance
+                SET 
+                    attended = ?,
+                    confirmation_timestamp = ?
+                WHERE registration_id = ?
+                """, (
+                    1 if attended else 0,
+                    now,
+                    registration_id
+                ))
+            else:
+                # Create new record
+                cursor.execute("""
+                INSERT INTO attendance (
+                    registration_id,
+                    telegram_id,
+                    hike_id,
+                    attended,
+                    confirmation_timestamp
+                ) VALUES (?, ?, ?, ?, ?)
+                """, (
+                    registration_id,
+                    telegram_id,
+                    hike_id,
+                    1 if attended else 0,
+                    now
+                ))
+            
+            conn.commit()
+            conn.close()
+            return {"success": True}
+                
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+    
+    
+    @staticmethod
     def sync_guide_status_with_admin():
         """Sync guide status with admin status for all users"""
         conn = DBUtils.get_connection()
