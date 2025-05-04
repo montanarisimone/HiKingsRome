@@ -317,7 +317,8 @@ class KeyboardBuilder:
         """Create keyboard for admin options for a specific hike"""
         keyboard = [
             [InlineKeyboardButton("👥 View participants", callback_data=f'admin_participants_{hike_id}')],
-            [InlineKeyboardButton("💰 Edit cost settings", callback_data=f'admin_edit_costs_{hike_id}')]
+            [InlineKeyboardButton("💰 Edit cost settings", callback_data=f'admin_edit_costs_{hike_id}')],
+            [InlineKeyboardButton("💵 Manage dynamic fees", callback_data=f'admin_dynamic_fees_{hike_id}')]
         ]
         
         # Show edit and cancel options only for active hikes
@@ -328,6 +329,22 @@ class KeyboardBuilder:
             keyboard.append([InlineKeyboardButton("🔄 Reactivate hike", callback_data=f'admin_reactivate_{hike_id}')])
         
         keyboard.append([InlineKeyboardButton("🔙 Back to hikes", callback_data='admin_manage_hikes')])
+        
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def create_dynamic_fees_keyboard(hike_id, is_locked=False):
+        """Create keyboard for managing dynamic fees"""
+        keyboard = []
+        
+        if is_locked:
+            keyboard.append([InlineKeyboardButton("🔓 Unlock fees", callback_data=f'unlock_fees_{hike_id}')])
+        else:
+            keyboard.append([InlineKeyboardButton("🔢 Update attendance", callback_data=f'update_attendance_{hike_id}')])
+            keyboard.append([InlineKeyboardButton("🔄 Recalculate fees", callback_data=f'recalculate_fees_{hike_id}')])
+            keyboard.append([InlineKeyboardButton("🔒 Lock fees", callback_data=f'lock_fees_{hike_id}')])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Back to hike details", callback_data=f'admin_hike_{hike_id}')])
         
         return InlineKeyboardMarkup(keyboard)
 
