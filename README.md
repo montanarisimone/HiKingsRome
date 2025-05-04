@@ -81,18 +81,23 @@ Our trusty digital hiking assistant! Hiky helps manage every aspect of our hikin
 
 ```
 Hiky_the_bot/
-├── HikyTheBot.py          # Main bot script
-├── requirements.txt       # Python dependencies
-├── setup_database.py      # Initial database setup
+├── HikyTheBot.py           # Main bot file with conversation handlers
+├── setup_database.py       # Database initialization script
+├── requirements.txt        # Python dependencies
 ├── utils/
-    ├── backup_database.py # Automatic backup utilities
-    ├── db_keyboards.py    # Telegram inline keyboards
-    ├── db_query_utils.py  # Database query utilities
-    ├── db_utils.py        # Core database functions
-    ├── markdown_utils.py  # Text formatting utilities
-    ├── rate_limiter.py    # Request rate limiting
-    └── weather_utils.py   # Weather forecast utilities
+│   ├── __init__.py
+│   ├── backup_database.py  # Database backup utility
+│   ├── db_utils.py         # Database utility functions
+│   ├── db_query_utils.py   # Admin database query utilities
+│   ├── db_keyboards.py     # Keyboard layouts for Telegram UI
+│   ├── weather_utils.py    # Weather API integration
+│   ├── markdown_utils.py   # Text formatting utilities
+│   └── rate_limiter.py     # Request rate limiting functionality
 ```
+
+#### 🗺️ Future Development
+
+Check the [ROADMAP.md](ROADMAP.md) file for planned features and enhancements.
 
 ### Other Tools and Scripts 🛠️  
 Anything else that helps us organize hikes, stay connected, and make HiKingsRome more efficient.
