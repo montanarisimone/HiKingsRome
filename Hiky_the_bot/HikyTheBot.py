@@ -5520,7 +5520,11 @@ def show_hike_details(update, context):
         hike_date = hike['hike_date'].strftime('%d/%m/%Y')
 
     # Check if user is admin/guide for fee display
-    user_id = update.effective_user.id
+    if isinstance(update, CallbackQuery):
+        user_id = update.from_user.id
+    else:
+        user_id = update.message.from_user.id
+        
     is_admin = DBUtils.check_is_admin(user_id)
     is_guide = is_admin or (DBUtils.get_user_profile(user_id) or {}).get('is_guide', False)
     
