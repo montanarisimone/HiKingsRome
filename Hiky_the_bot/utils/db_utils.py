@@ -307,6 +307,160 @@ class DBUtils:
         conn.close()
         
         return result is not None
+
+    @staticmethod
+    def get_fixed_costs():
+        """Get all fixed costs"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+        SELECT 
+            id,
+            name,
+            amount,
+            frequency,
+            description,
+            created_by,
+            created_on,
+            last_updated
+        FROM fixed_costs
+        ORDER BY name ASC
+        """)
+        
+        costs = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return costs
+    
+    @staticmethod
+    def add_fixed_cost(admin_id, cost_data):
+        """Add a new fixed cost"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now(rome_tz).strftime("%Y-%m-%d %H:%M:%S")
+        
+        try:
+            cursor.execute("""
+            INSERT INTO fixed_costs (
+                name,
+                amount,
+                frequency,
+                description,
+                created_by,
+                created_on,
+                last_updated
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                cost_data.get('name', ''),
+                cost_data.get('amount', 0.0),
+                cost_data.get('frequency', 'monthly'),
+                cost_data.get('description', ''),
+                admin_id,
+                now,
+                now
+            ))
+            
+            cost_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            return {"success": True, "cost_id": cost_id}
+            
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def update_fixed_cost(cost_id, admin_id, cost_data):
+        """Update an existing fixed cost"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        # Check if admin
+        if not DBUtils.check_is_admin(admin_id):
+            conn.close()
+            return {"success": False, "error": "Admin privileges required"}
+        
+        now = datetime.now(rome_tz).strftime("%Y-%m-%d %H:%M:%S")
+        
+        try:
+            cursor.execute("""
+            UPDATE fixed_costs
+            SET 
+                name = ?,
+                amount = ?,
+                frequency = ?,
+                description = ?,
+                last_updated = ?
+            WHERE id = ?
+            """, (
+                cost_data.get('name'),
+                cost_data.get('amount'),
+                cost_data.get('frequency'),
+                cost_data.get('description'),
+                now,
+                cost_id
+            ))
+            
+            conn.commit()
+            conn.close()
+            return {"success": True}
+            
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def delete_fixed_cost(cost_id, admin_id):
+        """Delete a fixed cost"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        # Check if admin
+        if not DBUtils.check_is_admin(admin_id):
+            conn.close()
+            return {"success": False, "error": "Admin privileges required"}
+        
+        try:
+            cursor.execute("""
+            DELETE FROM fixed_costs
+            WHERE id = ?
+            """, (cost_id,))
+            
+            conn.commit()
+            conn.close()
+            return {"success": True}
+            
+        except sqlite3.Error as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def get_cost_summary():
+        """Get a summary of costs by frequency"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+        SELECT 
+            frequency,
+            SUM(amount) as total_amount
+        FROM fixed_costs
+        GROUP BY frequency
+        ORDER BY 
+            CASE 
+                WHEN frequency = 'monthly' THEN 1
+                WHEN frequency = 'quarterly' THEN 2
+                WHEN frequency = 'yearly' THEN 3
+                ELSE 4
+            END
+        """)
+        
+        summary = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return summary
     
     @staticmethod
     def sync_guide_status_with_admin():
