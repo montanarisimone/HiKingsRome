@@ -564,6 +564,9 @@ class DBUtils:
             h.difficulty,
             h.description,
             h.is_active,
+            h.variable_costs,
+            h.fixed_cost_coverage,
+            h.max_cost_per_participant,
             (SELECT COUNT(*) FROM registrations r 
              JOIN users u ON r.telegram_id = u.telegram_id
              WHERE r.hike_id = h.id AND u.is_guide = 0) as current_participants
