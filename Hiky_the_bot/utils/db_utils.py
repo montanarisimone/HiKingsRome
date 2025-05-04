@@ -7,6 +7,7 @@ import os
 from datetime import datetime, date, timedelta
 import pytz
 import logging
+import math
 
 # Database file path
 DB_PATH = 'hiky_bot.db'
@@ -612,12 +613,14 @@ class DBUtils:
             guide_fee = 0
             if actual_attendance + registered_guides > 0:
                 guide_fee = variable_costs / (actual_attendance + registered_guides)
+                guide_fee = math.ceil(guide_fee)  # Round up guide fee
                 
             # Participant fee calculation
             participant_fee = guide_fee  # Start with the guide fee portion
             if actual_attendance > 0:
                 fixed_cost_portion = (fixed_cost_coverage * monthly_fixed_costs) / actual_attendance
                 participant_fee += fixed_cost_portion
+                participant_fee = math.ceil(participant_fee)  # Round up participant fee
                 
             # Apply maximum cost cap if set
             if max_cost_per_participant > 0 and participant_fee > max_cost_per_participant:
@@ -1254,6 +1257,10 @@ class DBUtils:
         # Calculate guide fees
         guide_fee_min = variable_costs / (min_participant_scenario + guide_count) if (min_participant_scenario + guide_count) > 0 else 0
         guide_fee_max = variable_costs / (max_participant_scenario + guide_count) if (max_participant_scenario + guide_count) > 0 else 0
+
+        # Round up guide fees
+        guide_fee_min = math.ceil(guide_fee_min)
+        guide_fee_max = math.ceil(guide_fee_max)
         
         # Calculate participant fees
         fixed_cost_portion_min = (fixed_cost_coverage * fixed_costs_monthly / min_participant_scenario) if min_participant_scenario > 0 else 0
@@ -1261,6 +1268,10 @@ class DBUtils:
         
         participant_fee_min = fixed_cost_portion_min + guide_fee_min
         participant_fee_max = fixed_cost_portion_max + guide_fee_max
+
+        # Round up participant fees
+        participant_fee_min = math.ceil(participant_fee_min)
+        participant_fee_max = math.ceil(participant_fee_max)
         
         # Apply maximum cost cap if set
         if max_cost_per_participant > 0:
