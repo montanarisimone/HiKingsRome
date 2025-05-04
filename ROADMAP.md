@@ -11,7 +11,6 @@ This document outlines the development plan for HiKingsRome Bot, tracking comple
 - **User Features**
   - [ ] Waiting list for complete hike
   - [ ] My Hikes section reorganization: Create separate sections for past and upcoming hikes
-  - [ ] Hike cost notification: Add cost per person information to the 1-day reminder
   - [ ] In-app payment processing: Add direct payment options within the bot (Telegram stars)
  
 ## 📝 Planned Features
@@ -65,6 +64,8 @@ This document outlines the development plan for HiKingsRome Bot, tracking comple
     - Month-based organization
     - Difficulty indicators
     - Availability status
+    - Fee per person
+  - [X] Hike cost notification: Add cost per person information
   - [x] Privacy consent management system:
     - Basic required consents
     - Optional consents for car sharing, photos, and marketing
