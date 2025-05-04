@@ -59,6 +59,10 @@ def setup_database():
         variable_costs REAL DEFAULT 0,
         fixed_cost_coverage REAL DEFAULT 0.5,
         max_cost_per_participant REAL DEFAULT 0, # 0 means no maximum
+        actual_attendance INTEGER DEFAULT 0,
+        fee_locked BOOLEAN DEFAULT 0,
+        final_participant_fee REAL DEFAULT 0,
+        final_guide_fee REAL DEFAULT 0,
         description TEXT,
         created_by INTEGER,
         is_active BOOLEAN DEFAULT 1,
@@ -86,6 +90,21 @@ def setup_database():
         FOREIGN KEY (telegram_id) REFERENCES users(telegram_id),
         FOREIGN KEY (hike_id) REFERENCES hikes(id),
         UNIQUE(telegram_id, hike_id)
+    )
+    ''')
+
+    # Create a table to track attendance confirmations
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS attendance (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        registration_id INTEGER NOT NULL,
+        telegram_id INTEGER NOT NULL,
+        hike_id INTEGER NOT NULL,
+        attended BOOLEAN DEFAULT 0,
+        confirmation_timestamp TIMESTAMP,
+        FOREIGN KEY (registration_id) REFERENCES registrations(id),
+        FOREIGN KEY (telegram_id) REFERENCES users(telegram_id),
+        FOREIGN KEY (hike_id) REFERENCES hikes(id)
     )
     ''')
     
