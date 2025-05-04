@@ -835,6 +835,149 @@ class DBUtils:
             return {"success": False, "error": str(e)}
     
     @staticmethod
+    def get_monthly_fixed_costs():
+        """Get the total monthly fixed costs"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        # Get monthly costs
+        cursor.execute("""
+        SELECT SUM(amount) as total
+        FROM fixed_costs
+        WHERE frequency = 'monthly'
+        """)
+        monthly = cursor.fetchone()
+        monthly_amount = monthly['total'] if monthly and monthly['total'] is not None else 0
+        
+        # Get quarterly costs (divided by 3 to get monthly equivalent)
+        cursor.execute("""
+        SELECT SUM(amount) as total
+        FROM fixed_costs
+        WHERE frequency = 'quarterly'
+        """)
+        quarterly = cursor.fetchone()
+        quarterly_amount = (quarterly['total'] / 3) if quarterly and quarterly['total'] is not None else 0
+        
+        # Get yearly costs (divided by 12 to get monthly equivalent)
+        cursor.execute("""
+        SELECT SUM(amount) as total
+        FROM fixed_costs
+        WHERE frequency = 'yearly'
+        """)
+        yearly = cursor.fetchone()
+        yearly_amount = (yearly['total'] / 12) if yearly and yearly['total'] is not None else 0
+        
+        conn.close()
+        
+        # Return total monthly cost
+        return monthly_amount + quarterly_amount + yearly_amount
+    
+    @staticmethod
+    def calculate_fee_ranges(hike_data, fixed_costs_monthly=None, participant_count=None):
+        """
+        Calculate fee ranges for guides and participants based on fixed and variable costs.
+        
+        Args:
+            hike_data (dict): Hike details including variable_costs, guides, max_participants, fixed_cost_coverage
+            fixed_costs_monthly (float, optional): Monthly fixed costs amount
+            participant_count (int, optional): Current participants count, if None use min 1 and max from hike data
+            
+        Returns:
+            dict: Dictionary containing min/max fees for guides and participants
+        """
+        # Extract data
+        variable_costs = float(hike_data.get('variable_costs', 0))
+        guide_count = int(hike_data.get('guides', 1))
+        max_participants = int(hike_data.get('max_participants', 0))
+        fixed_cost_coverage = float(hike_data.get('fixed_cost_coverage', 0.5))  # Default 50%
+        max_cost_per_participant = float(hike_data.get('max_cost_per_participant', 0))
+        
+        # Get monthly fixed costs if not provided
+        if fixed_costs_monthly is None:
+            fixed_costs_monthly = DBUtils.get_monthly_fixed_costs()
+        
+        # Determine participant counts for min/max scenarios
+        min_participant_scenario = 1  # Minimum case: only 1 participant
+        max_participant_scenario = max_participants  # Maximum case: full attendance
+        
+        if participant_count is not None:
+            current_participants = min(participant_count, max_participants)
+            min_participant_scenario = current_participants
+            max_participant_scenario = current_participants
+        
+        # Calculate guide fees
+        guide_fee_min = variable_costs / (min_participant_scenario + guide_count) if (min_participant_scenario + guide_count) > 0 else 0
+        guide_fee_max = variable_costs / (max_participant_scenario + guide_count) if (max_participant_scenario + guide_count) > 0 else 0
+        
+        # Calculate participant fees
+        fixed_cost_portion_min = (fixed_cost_coverage * fixed_costs_monthly / min_participant_scenario) if min_participant_scenario > 0 else 0
+        fixed_cost_portion_max = (fixed_cost_coverage * fixed_costs_monthly / max_participant_scenario) if max_participant_scenario > 0 else 0
+        
+        participant_fee_min = fixed_cost_portion_min + guide_fee_min
+        participant_fee_max = fixed_cost_portion_max + guide_fee_max
+        
+        # Apply maximum cost cap if set
+        if max_cost_per_participant > 0:
+            participant_fee_min = min(participant_fee_min, max_cost_per_participant)
+            participant_fee_max = min(participant_fee_max, max_cost_per_participant)
+        
+        return {
+            'guide_fee_min': guide_fee_min,
+            'guide_fee_max': guide_fee_max,
+            'participant_fee_min': participant_fee_min,
+            'participant_fee_max': participant_fee_max,
+            'fixed_costs_monthly': fixed_costs_monthly,
+            'variable_costs': variable_costs,
+            'fixed_cost_coverage': fixed_cost_coverage,
+            'max_cost_per_participant': max_cost_per_participant
+        }
+    
+    @staticmethod
+    def update_hike_cost_settings(hike_id, admin_id, fixed_cost_coverage, max_cost_per_participant):
+        """Update hike cost settings (admin only)"""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        # Check if admin
+        if not DBUtils.check_is_admin(admin_id):
+            conn.close()
+            return {"success": False, "error": "Admin privileges required"}
+        
+        try:
+            # Validate inputs
+            fixed_cost_coverage = float(fixed_cost_coverage)
+            if fixed_cost_coverage < 0 or fixed_cost_coverage > 1:
+                conn.close()
+                return {"success": False, "error": "Fixed cost coverage must be between 0 and 1 (0% to 100%)"}
+            
+            max_cost_per_participant = float(max_cost_per_participant)
+            if max_cost_per_participant < 0:
+                conn.close()
+                return {"success": False, "error": "Maximum cost per participant cannot be negative"}
+            
+            # Update hike settings
+            cursor.execute("""
+            UPDATE hikes
+            SET 
+                fixed_cost_coverage = ?,
+                max_cost_per_participant = ?
+            WHERE id = ?
+            """, (
+                fixed_cost_coverage,
+                max_cost_per_participant,
+                hike_id
+            ))
+            
+            conn.commit()
+            conn.close()
+            return {"success": True}
+                
+        except (ValueError, sqlite3.Error) as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+    
+        
+    @staticmethod
     def add_group_member(telegram_id):
         """Add a user to group members"""
         conn = DBUtils.get_connection()
