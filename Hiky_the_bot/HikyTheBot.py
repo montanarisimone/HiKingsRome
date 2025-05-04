@@ -1046,13 +1046,7 @@ def handle_edit_cost_settings(update, context):
     logger.info(f"Edit costs callback data: {query.data}")
 
     # Simply extract the last part after the final underscore
-    try:
-        hike_id = int(callback_data.split('_')[-1])
-        logger.info(f"Extracted hike_id: {hike_id}")
-    except ValueError:
-        logger.error(f"Failed to extract hike_id from {callback_data}")
-        query.edit_message_text("Error processing hike ID")
-        return ADMIN_MENU
+    hike_id = int(query.data.replace('admin_edit_costs_', ''))
         
     context.user_data['editing_hike_id'] = hike_id
     
