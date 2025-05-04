@@ -3240,15 +3240,45 @@ def handle_admin_choice(update, context):
         conn.close()
         
         registered_guides = guide_result['guide_count'] if guide_result else 0
-        total_guides = selected_hike.get('guides', 1)  # Default to 1 if not specified
+        guides_total = selected_hike.get('guides', 1)  # Default to 1 if not specified
+        participants_count = selected_hike.get('current_participants', 0)
+        max_participants = selected_hike.get('max_participants', 0)
+
+        # Calculate fees
+        fixed_cost_coverage = selected_hike.get('fixed_cost_coverage', 0.5)  # Default 50%
+        max_cost_per_participant = selected_hike.get('max_cost_per_participant', 0)
+
+        # Get monthly fixed costs
+        monthly_fixed_costs = DBUtils.get_monthly_fixed_costs()
+
+        # Calculate fee ranges
+        fee_data = DBUtils.calculate_fee_ranges(selected_hike, monthly_fixed_costs)
+
+        # Format for display (round to 2 decimal places)
+        guide_fee_min = round(fee_data['guide_fee_min'], 2)
+        guide_fee_max = round(fee_data['guide_fee_max'], 2)
+        participant_fee_min = round(fee_data['participant_fee_min'], 2)
+        participant_fee_max = round(fee_data['participant_fee_max'], 2)
+        variable_costs = selected_hike.get('variable_costs', 0)
+        
+        # Convert percentages to display format
+        fixed_cost_pct = int(fixed_cost_coverage * 100)
         
         query.edit_message_text(
             f"🏔️ *{selected_hike['hike_name']}*\n\n"
             f"Date: {hike_date}\n"
             f"Status: {status_emoji} {status_text}\n"
-            f"Participants: {selected_hike['current_participants']}/{selected_hike['max_participants']}\n"
-            f"Guides: {registered_guides}/{total_guides}\n"
-            f"Difficulty: {selected_hike.get('difficulty', 'Not set')}\n\n"
+            f"👥 Participants: {participants_count}/{max_participants}\n"
+            f"👑 Guides: {registered_guides}/{guides_total}\n"
+            f"📊 Difficulty: {selected_hike.get('difficulty', 'Not set')}\n\n"
+            f"💰 *Cost Details*\n"
+            f"Total Fixed Costs: {monthly_fixed_costs:.2f}€ per month\n"
+            f"Total Variable Costs: {variable_costs:.2f}€\n"
+            f"Fixed Cost Coverage: {fixed_cost_pct}%\n"
+            f"Maximum Cost Per Participant: {max_cost_per_participant:.2f}€\n\n"
+            f"🧮 *Fee Calculations*\n"
+            f"Participant Fee: {participant_fee_min:.2f}€ - {participant_fee_max:.2f}€\n"
+            f"Guide Fee: {guide_fee_min:.2f}€ - {guide_fee_max:.2f}€\n\n"
             f"What would you like to do with this hike?",
             parse_mode='Markdown',
             reply_markup=reply_markup
