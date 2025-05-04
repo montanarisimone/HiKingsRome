@@ -61,7 +61,8 @@ logger.info(f"Using python-telegram-bot version: {telegram.__version__}")
  PROFILE_MENU, PROFILE_EDIT, PROFILE_NAME, PROFILE_SURNAME, PROFILE_EMAIL,  PROFILE_PHONE, PROFILE_BIRTH_DATE,
  ADMIN_MAINTENANCE, MAINTENANCE_DATE, MAINTENANCE_START_TIME, MAINTENANCE_END_TIME, MAINTENANCE_REASON,
  ADMIN_QUERY_DB, ADMIN_QUERY_EXECUTE, ADMIN_QUERY_SAVE, ADMIN_QUERY_DELETE, ADMIN_QUERY_NAME, 
- ADMIN_COSTS, COST_NAME, COST_AMOUNT, COST_FREQUENCY, COST_DESCRIPTION, ADMIN_HIKE_VARIABLE_COSTS) = range(53)
+ ADMIN_COSTS, COST_NAME, COST_AMOUNT, COST_FREQUENCY, COST_DESCRIPTION, ADMIN_HIKE_VARIABLE_COSTS,
+ ADMIN_EDIT_COST_SETTINGS, ADMIN_FIXED_COST_COVERAGE, ADMIN_MAX_COST_PER_PARTICIPANT) = range(56)
 
 # Define timezone for Rome (for consistent timestamps)
 rome_tz = pytz.timezone('Europe/Rome')
@@ -1030,6 +1031,138 @@ def show_cost_summary(update, context):
     return ADMIN_COSTS
     
 # End def to manage cost menu
+
+# Start handlers for editing cost settings
+def handle_edit_cost_settings(update, context):
+    """Handle editing of hike cost settings"""
+    query = update.callback_query
+    query.answer()
+    
+    hike_id = int(query.data.replace('admin_edit_costs_', ''))
+    context.user_data['editing_hike_id'] = hike_id
+    
+    # Get hike details
+    hikes = context.user_data.get('admin_hikes', [])
+    selected_hike = next((h for h in hikes if h['id'] == hike_id), None)
+    
+    if not selected_hike:
+        query.edit_message_text(
+            "Hike not found. Please try again."
+        )
+        return ADMIN_MENU
+    
+    # Get current settings
+    fixed_cost_coverage = selected_hike.get('fixed_cost_coverage', 0.5)
+    max_cost_per_participant = selected_hike.get('max_cost_per_participant', 0)
+    
+    # Convert percentages for display
+    fixed_cost_pct = int(fixed_cost_coverage * 100)
+    
+    # Create keyboard for returning
+    keyboard = [[InlineKeyboardButton("🔙 Cancel", callback_data=f'admin_hike_{hike_id}')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    query.edit_message_text(
+        f"💰 *Edit Cost Settings*\n\n"
+        f"Current Settings:\n"
+        f"• Fixed Cost Coverage: {fixed_cost_pct}%\n"
+        f"• Maximum Cost Per Participant: {max_cost_per_participant:.2f}€\n\n"
+        f"Please enter the new fixed cost coverage percentage (0-100):",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    
+    return ADMIN_FIXED_COST_COVERAGE
+
+def save_fixed_cost_coverage(update, context):
+    """Save fixed cost coverage percentage"""
+    try:
+        # Parse percentage and validate
+        percentage = int(update.message.text.strip())
+        if percentage < 0 or percentage > 100:
+            update.message.reply_text(
+                "⚠️ Fixed cost coverage must be between 0% and 100%. Please enter a valid percentage:"
+            )
+            return ADMIN_FIXED_COST_COVERAGE
+        
+        # Store as decimal (0-1)
+        context.user_data['fixed_cost_coverage'] = percentage / 100
+        
+        # Ask for maximum cost
+        update.message.reply_text(
+            "💰 Please enter the maximum cost per participant (in €):\n"
+            "Enter 0 for no maximum."
+        )
+        return ADMIN_MAX_COST_PER_PARTICIPANT
+        
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Please enter a valid number between 0 and 100:"
+        )
+        return ADMIN_FIXED_COST_COVERAGE
+
+def save_max_cost_per_participant(update, context):
+    """Save maximum cost per participant and continue with description"""
+    try:
+        # Parse decimal value
+        max_cost = float(update.message.text.strip().replace(',', '.'))
+        if max_cost < 0:
+            update.message.reply_text(
+                "⚠️ Maximum cost cannot be negative. Please enter a valid amount:"
+            )
+            return ADMIN_MAX_COST_PER_PARTICIPANT
+
+        # Store for later
+        context.user_data['max_cost_per_participant'] = max_cost
+
+        # Now continue with description
+        update.message.reply_text(
+            "📝 Please enter a description for this hike. "
+            "Include any important details like meeting point, what to bring, etc."
+        )
+        return ADMIN_HIKE_DESCRIPTION
+        
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Please enter a valid number (e.g., 15.50):"
+        )
+        return ADMIN_MAX_COST_PER_PARTICIPANT
+################## RIMUOVERE?? ##########################
+#        # Get hike ID
+#        hike_id = context.user_data.get('editing_hike_id')
+#        if not hike_id:
+#            update.message.reply_text("❌ Error: Hike ID not found. Please try again.")
+#            return ADMIN_MENU
+#        
+#        # Save settings to database
+#        result = DBUtils.update_hike_cost_settings(
+#            hike_id,
+#            update.effective_user.id,
+#            context.user_data.get('fixed_cost_coverage', 0.5),
+#            max_cost
+#        )
+#        
+#        if result['success']:
+#            update.message.reply_text("✅ Cost settings updated successfully.")
+#        else:
+#            update.message.reply_text(f"❌ Failed to update: {result.get('error', 'Unknown error')}")
+#        
+#        # Return to hike details
+#        keyboard = [[InlineKeyboardButton("🔙 Back to hike details", callback_data=f'admin_hike_{hike_id}')]]
+#        reply_markup = InlineKeyboardMarkup(keyboard)
+#        
+#        update.message.reply_text(
+#            "What would you like to do next?",
+#            reply_markup=reply_markup
+#        )
+#        return ADMIN_MENU
+#        
+#    except ValueError:
+#        update.message.reply_text(
+#            "⚠️ Please enter a valid number (e.g., 15.50):"
+#        )
+#        return ADMIN_MAX_COST_PER_PARTICIPANT
+# End handlers for editing cost settings
 
 # Start def to manage personal profile
 def show_profile_menu(update, context):
@@ -3812,13 +3945,13 @@ def admin_save_variable_costs(update, context):
         
         # Store the variable costs
         context.user_data['variable_costs'] = variable_costs
-        
-        # Now continue with description
+
+        # After variable costs, ask for fixed cost coverage
         update.message.reply_text(
-            "📝 Please enter a description for this hike. "
-            "Include any important details like meeting point, what to bring, etc."
+            "💰 Enter the percentage of fixed costs to cover (0-100%):\n"
+            "This determines how much of the monthly fixed costs will be distributed among participants."
         )
-        return ADMIN_HIKE_DESCRIPTION
+        return ADMIN_FIXED_COST_COVERAGE
         
     except ValueError:
         update.message.reply_text(
@@ -3839,7 +3972,31 @@ def admin_save_description(update, context):
 
     # Format variable costs with two decimal places
     variable_costs = hike_data.get('variable_costs', 0)
-    variable_costs_display = f"{variable_costs:.2f}"
+    fixed_cost_coverage = hike_data.get('fixed_cost_coverage', 0.5)
+    max_cost_per_participant = hike_data.get('max_cost_per_participant', 0)
+
+    # Calculate fee ranges for preview
+    monthly_fixed_costs = DBUtils.get_monthly_fixed_costs()
+
+    # Create a simulated hike data structure for fee calculation
+    hike_for_calc = {
+        'max_participants': hike_data.get('max_participants', 0),
+        'guides': hike_data.get('guides', 1),
+        'variable_costs': variable_costs,
+        'fixed_cost_coverage': fixed_cost_coverage,
+        'max_cost_per_participant': max_cost_per_participant
+    }
+    
+    fee_data = DBUtils.calculate_fee_ranges(hike_for_calc, monthly_fixed_costs)
+
+    # Format for display (round to 2 decimal places)
+    guide_fee_min = round(fee_data['guide_fee_min'], 2)
+    guide_fee_max = round(fee_data['guide_fee_max'], 2)
+    participant_fee_min = round(fee_data['participant_fee_min'], 2)
+    participant_fee_max = round(fee_data['participant_fee_max'], 2)
+    
+    # Convert percentages to display format
+    fixed_cost_pct = int(fixed_cost_coverage * 100)
     
     summary = (
         f"🏔️ *New Hike Summary*\n\n"
@@ -3849,8 +4006,15 @@ def admin_save_description(update, context):
         f"Max Participants: {hike_data['max_participants']}\n"
         f"Location: {hike_data['latitude']}, {hike_data['longitude']}\n"
         f"Difficulty: {hike_data['difficulty']}\n\n"
-        f"Variable Costs: {variable_costs_display}€\n\n"
-        f"Description:\n{hike_data['description']}\n\n"
+        f"💰 *Cost Details*\n"
+        f"Monthly Fixed Costs: {monthly_fixed_costs:.2f}€\n"
+        f"Variable Costs: {variable_costs:.2f}€\n"
+        f"Fixed Cost Coverage: {fixed_cost_pct}%\n"
+        f"Maximum Cost Per Participant: {max_cost_per_participant:.2f}€\n\n"
+        f"🧮 *Fee Calculations (Preview)*\n"
+        f"Participant Fee: {participant_fee_min:.2f}€ - {participant_fee_max:.2f}€\n"
+        f"Guide Fee: {guide_fee_min:.2f}€ - {guide_fee_max:.2f}€\n\n"
+        f"📝 *Description*\n{hike_data['description']}\n\n"
         f"Is this correct?"
     )
     
@@ -3885,6 +4049,8 @@ def admin_confirm_hike(update, context):
             'longitude': context.user_data.get('longitude'),
             'difficulty': context.user_data.get('difficulty'),
             'variable_costs': context.user_data.get('variable_costs', 0),
+            'fixed_cost_coverage': context.user_data.get('fixed_cost_coverage', 0.5),
+            'max_cost_per_participant': context.user_data.get('max_cost_per_participant', 0),
             'description': context.user_data.get('description')
         }
         
@@ -5325,6 +5491,7 @@ def main():
                 CallbackQueryHandler(show_maintenance_menu, pattern='^admin_maintenance$'),
                 CallbackQueryHandler(handle_admin_choice, pattern='^confirm_cancel_hike_'),
                 CallbackQueryHandler(handle_admin_choice, pattern='^confirm_reactivate_hike_'),
+                CallbackQueryHandler(handle_edit_cost_settings, pattern='^admin_edit_costs_'),
                 CallbackQueryHandler(show_query_db_menu, pattern='^query_db$'),
                 CallbackQueryHandler(handle_admin_choice, pattern='^back_to_admin$'),
                 CallbackQueryHandler(menu, pattern='^back_to_menu$')
@@ -5374,6 +5541,24 @@ def main():
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(admin_confirm_hike, pattern='^(confirm_create_hike|cancel_create_hike)$')
+            ],
+            ADMIN_EDIT_COST_SETTINGS: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_admin_choice, pattern='^admin_hike_'),
+                MessageHandler(Filters.text & ~Filters.command, save_fixed_cost_coverage)
+            ],
+            ADMIN_FIXED_COST_COVERAGE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_admin_choice, pattern='^admin_hike_'),
+                MessageHandler(Filters.text & ~Filters.command, save_fixed_cost_coverage)
+            ],
+            ADMIN_MAX_COST_PER_PARTICIPANT: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_admin_choice, pattern='^admin_hike_'),
+                MessageHandler(Filters.text & ~Filters.command, save_max_cost_per_participant)
             ],
             ADMIN_COSTS: [
                 CommandHandler('menu', menu),
