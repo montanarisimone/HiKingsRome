@@ -2,6 +2,40 @@
 
 This document outlines the development plan for HiKingsRome Bot, tracking completed features and planned enhancements.
 
+## 🚧 In Progress
+
+- **Admin Features**
+  - [ ] Payment tracking system: Add flags for tracking payments in the participant list
+  - [ ] Access control: Show admin menu only to users with admin privileges
+
+- **User Features**
+  - [ ] Waiting list for complete hike
+  - [ ] My Hikes section reorganization: Create separate sections for past and upcoming hikes
+  - [ ] Hike cost notification: Add cost per person information to the 1-day reminder
+  - [ ] In-app payment processing: Add direct payment options within the bot
+ 
+## 📝 Planned Features
+
+- **Admin Features**
+  - [ ] User feedback collection after hikes
+  - [ ] Admin notification system enhancement
+  - [ ] Optimize database queries for better performance
+
+- **User Features**
+  - [ ] Provide interactive equipment checklist
+  - [ ] Gamification system (achievements, badges)
+  - [ ] Car sharing matching system based on users location
+  - [ ] Environmental impact statistics for car sharing
+  - [ ] Hike difficulty recommendation based on user history
+  - [ ] Photo sharing capabilities for hikes
+  - [ ] LLM/IF..ELSE functionality for unrestricted user-bot interactions
+  - [ ] Voice message processing
+
+- **Technical Improvements**
+  - [ ] Mobile app companion (Flutter/React Native)
+  - [ ] Code refactoring: Improve modularity and maintainability
+  - [ ] Enhanced error handling: Improve recovery from unexpected errors
+
 ## ✅ Completed Features
 
 ### Core Functionality
@@ -26,12 +60,7 @@ This document outlines the development plan for HiKingsRome Bot, tracking comple
 - [x] Error handling and recovery
 - [x] Location-based organization (Rome districts)
 
-## 🚧 In Progress
 
-- [ ] Environmental impact statistics for car sharing
-- [ ] Website integration
-- [ ] Instagram feed integration
-- [ ] Enhanced analytics for admins
 
 ## 📝 Planned Features
 
