@@ -3689,13 +3689,70 @@ def admin_save_difficulty(update, context):
     
     difficulty = query.data.replace('difficulty_', '')
     context.user_data['difficulty'] = difficulty.capitalize()
+
+    # Show fixed costs verification before asking for description
+    # Get current fixed costs
+    fixed_costs = DBUtils.get_fixed_costs()
+
+    # Format costs into message
+    costs_message = "🔍 *Are the fixed costs correct?*\n\n"
+    for cost in fixed_costs:
+        costs_message += f"• {cost['name']}: {cost['amount']}€ ({cost['frequency']})\n"
+
+    costs_message += "\nPlease verify these costs before continuing with hike creation."
+
+    # Create confirmation buttons
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Yes, continue", callback_data='costs_verified'),
+            InlineKeyboardButton("❌ No, need to update", callback_data='update_costs')
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     # Ask for description
     query.edit_message_text(
-        "📝 Please enter a description for this hike. "
-        "Include any important details like meeting point, what to bring, etc."
+        costs_message,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
     )
     return ADMIN_HIKE_DESCRIPTION
+
+def handle_costs_verification(update, context):
+    """Handle response to fixed costs verification"""
+    query = update.callback_query
+    query.answer()
+    
+    if query.data == 'costs_verified':
+        # Continue with hike creation - ask for description
+        query.edit_message_text(
+            "📝 Please enter a description for this hike. "
+            "Include any important details like meeting point, what to bring, etc."
+        )
+        return ADMIN_HIKE_DESCRIPTION
+    
+    elif query.data == 'update_costs':
+        # Redirect to the costs management panel
+        query.edit_message_text(
+            "⚠️ Hike creation cancelled. Redirecting to cost management..."
+        )
+        
+        # Clear hike creation data
+        for key in ['hike_name', 'hike_date', 'max_participants', 'latitude', 
+                    'longitude', 'difficulty', 'guides']:
+            if key in context.user_data:
+                del context.user_data[key]
+        
+        # Show cost control menu after a short delay
+        context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="💰 *Cost Control Management*\n\n"
+                "Here you can manage fixed costs for your operation.\n\n"
+                "Select an existing cost to edit, or add a new one:",
+            parse_mode='Markdown',
+            reply_markup=KeyboardBuilder.create_cost_control_keyboard(DBUtils.get_fixed_costs())
+        )
+        return ADMIN_COSTS
 
 def admin_save_description(update, context):
     """Save hike description from admin input"""
@@ -5227,6 +5284,7 @@ def main():
             ADMIN_HIKE_DESCRIPTION: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_costs_verification, pattern='^(costs_verified|update_costs)$'),
                 MessageHandler(Filters.text & ~Filters.command, admin_save_description)
             ],
             ADMIN_CONFIRM_HIKE: [
