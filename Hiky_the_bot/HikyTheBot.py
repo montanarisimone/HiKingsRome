@@ -16,6 +16,7 @@ import logging
 import sqlite3
 import re
 import threading
+import math
 from datetime import datetime, date, timedelta
 from datetime import time as datetime_time
 from functools import wraps
