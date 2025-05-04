@@ -767,8 +767,9 @@ class DBUtils:
                 difficulty,
                 description,
                 created_by,
-                is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                is_active,
+                variable_costs
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
             """, (
                 hike_data.get('hike_name', ''),
                 hike_data.get('hike_date', ''),
@@ -778,7 +779,8 @@ class DBUtils:
                 hike_data.get('longitude'),
                 hike_data.get('difficulty', ''),
                 hike_data.get('description', ''),
-                created_by
+                created_by,
+                hike_data.get('variable_costs', 0)
             ))
             
             hike_id = cursor.lastrowid
