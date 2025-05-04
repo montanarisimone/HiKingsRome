@@ -121,6 +121,38 @@ def setup_database():
         FOREIGN KEY (created_by) REFERENCES users(telegram_id)
     )
     ''')
+
+    # Dopo la tabella maintenance, aggiungi:
+
+    # Create fixed_costs table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS fixed_costs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        amount REAL NOT NULL,
+        frequency TEXT NOT NULL,
+        description TEXT,
+        created_by INTEGER,
+        created_on TIMESTAMP,
+        last_updated TIMESTAMP,
+        FOREIGN KEY (created_by) REFERENCES users(telegram_id)
+    )
+    ''')
+    
+    # Insert default costs if they don't exist
+    default_costs = [
+        ('Domain', 15.0, 'yearly', 'Domain name registration'),
+        ('AI Claude', 0.0, 'monthly', 'AI assistant subscription'),
+        ('Google Cloud', 8.0, 'monthly', 'Server hosting costs'),
+        ('Website', 0.0, 'yearly', 'Website hosting and maintenance')
+    ]
+    
+    for cost in default_costs:
+        cursor.execute('''
+        INSERT OR IGNORE INTO fixed_costs (name, amount, frequency, description, created_on, last_updated)
+        SELECT ?, ?, ?, ?, datetime('now'), datetime('now')
+        WHERE NOT EXISTS (SELECT 1 FROM fixed_costs WHERE name = ?)
+        ''', (cost[0], cost[1], cost[2], cost[3], cost[0]))
     
     # Commit changes and close connection
     conn.commit()
