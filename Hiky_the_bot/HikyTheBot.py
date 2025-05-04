@@ -5456,6 +5456,7 @@ def show_hike_signup_details(update, context, hike_id):
         
         if fee_data.get('success', False):
             current_fee = fee_data.get('participant_fee', 0)
+            current_fee = math.ceil(current_fee)
             fee_message = f"💰 Estimated Fee: {current_fee:.2f}€ (may change based on attendance)"
         else:
             # Fall back to fee range
@@ -5464,7 +5465,9 @@ def show_hike_signup_details(update, context, hike_id):
             fee_range = DBUtils.calculate_fee_ranges(hike_data, monthly_fixed_costs)
             
             fee_min = round(fee_range['participant_fee_min'], 2)
+            fee_min = math.ceil(fee_min)
             fee_max = round(fee_range['participant_fee_max'], 2)
+            fee_max = math.ceil(fee_max)
             
             fee_message = f"💰 Estimated Fee Range: {fee_min:.2f}€ - {fee_max:.2f}€"
     
