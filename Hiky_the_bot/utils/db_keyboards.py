@@ -338,6 +338,7 @@ class KeyboardBuilder:
         keyboard = []
         
         if is_locked:
+            keyboard.append([InlineKeyboardButton("📊 Payment Report", callback_data=f'payment_report_{hike_id}')])
             keyboard.append([InlineKeyboardButton("🔓 Unlock fees", callback_data=f'unlock_fees_{hike_id}')])
         else:
             keyboard.append([InlineKeyboardButton("🔢 Update attendance", callback_data=f'update_attendance_{hike_id}')])
