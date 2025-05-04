@@ -6,12 +6,20 @@ import sqlite3
 import os
 from datetime import datetime, date, timedelta
 import pytz
+import logging
 
 # Database file path
 DB_PATH = 'hiky_bot.db'
 
 # Rome timezone for consistent timestamps
 rome_tz = pytz.timezone('Europe/Rome')
+
+# Set logger
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 class DBUtils:
     """Utility class for database operations"""
