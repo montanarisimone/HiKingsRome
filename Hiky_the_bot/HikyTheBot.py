@@ -523,19 +523,16 @@ def save_cost_to_database(update, context):
         'description': context.user_data.get('cost_description', '')
     }
     
-    # Save to database
-    result = DBUtils.add_fixed_cost(user_id, cost_data)
-    
     logger.info(f"Cost data to be saved: {cost_data}")
 
     # Check that all necessary data is present
     if not all(key in cost_data and cost_data[key] is not None for key in ['name', 'amount', 'frequency']):
-        logger.error(f"Dati costo incompleti: {cost_data}")
+        logger.error(f"Cost data not completed: {cost_data}")
 
         # Display which data are missing in the logs
         for key in ['name', 'amount', 'frequency']:
             if key not in cost_data or cost_data[key] is None:
-                logger.error(f"Dato mancante: {key}")
+                logger.error(f"Missing data: {key}")
 
         # Create an error message and return to the cost menu
         error_message = "⚠️ Incomplete cost data. Please try again."
@@ -556,7 +553,16 @@ def save_cost_to_database(update, context):
     try:
         # Save to database
         logger.info("Attempt to save cost in database...")
-        result = DBUtils.add_fixed_cost(user_id, cost_data)
+        # Check if we're editing an existing cost or creating a new one
+        if 'editing_cost_id' in context.user_data:
+            # Update existing cost
+            result = DBUtils.update_fixed_cost(context.user_data['editing_cost_id'], user_id, cost_data)
+            # Clear the editing ID after the update
+            del context.user_data['editing_cost_id']
+        else:
+            # Add new cost
+            result = DBUtils.add_fixed_cost(user_id, cost_data)
+            
         logger.info(f"Result saved: {result}")
     
         if result['success']:
@@ -599,6 +605,11 @@ def save_cost_to_database(update, context):
                     text=error_message,
                     reply_markup=reply_markup
                 )
+
+        # Clear the context data related to costs to prevent duplication
+        for key in ['cost_name', 'cost_amount', 'cost_frequency', 'cost_description']:
+            if key in context.user_data:
+                del context.user_data[key]
 
     except Exception as e:
         logger.error(f"Unexpected error in save_cost_to_database: {e}")
