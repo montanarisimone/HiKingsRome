@@ -1132,53 +1132,41 @@ def save_max_cost_per_participant(update, context):
         # Store for later
         context.user_data['max_cost_per_participant'] = max_cost
 
-        # Now continue with description
-        update.message.reply_text(
-            "📝 Please enter a description for this hike. "
-            "Include any important details like meeting point, what to bring, etc."
+        # Get hike ID from context
+        hike_id = context.user_data.get('editing_hike_id')
+        if not hike_id:
+            update.message.reply_text("❌ Error: Hike ID not found. Please try again.")
+            return ADMIN_MENU
+        
+        # Save settings to database
+        result = DBUtils.update_hike_cost_settings(
+            hike_id,
+            update.effective_user.id,
+            context.user_data.get('fixed_cost_coverage', 0.5),
+            max_cost
         )
-        return ADMIN_HIKE_DESCRIPTION
+        
+        if result['success']:
+            update.message.reply_text("✅ Cost settings updated successfully.")
+        else:
+            update.message.reply_text(f"❌ Failed to update: {result.get('error', 'Unknown error')}")
+        
+        # Return to hike details
+        keyboard = [[InlineKeyboardButton("🔙 Back to hike details", callback_data=f'admin_hike_{hike_id}')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        update.message.reply_text(
+            "What would you like to do next?",
+            reply_markup=reply_markup
+        )
+        return ADMIN_MENU
         
     except ValueError:
         update.message.reply_text(
             "⚠️ Please enter a valid number (e.g., 15.50):"
         )
         return ADMIN_MAX_COST_PER_PARTICIPANT
-################## RIMUOVERE?? ##########################
-#        # Get hike ID
-#        hike_id = context.user_data.get('editing_hike_id')
-#        if not hike_id:
-#            update.message.reply_text("❌ Error: Hike ID not found. Please try again.")
-#            return ADMIN_MENU
-#        
-#        # Save settings to database
-#        result = DBUtils.update_hike_cost_settings(
-#            hike_id,
-#            update.effective_user.id,
-#            context.user_data.get('fixed_cost_coverage', 0.5),
-#            max_cost
-#        )
-#        
-#        if result['success']:
-#            update.message.reply_text("✅ Cost settings updated successfully.")
-#        else:
-#            update.message.reply_text(f"❌ Failed to update: {result.get('error', 'Unknown error')}")
-#        
-#        # Return to hike details
-#        keyboard = [[InlineKeyboardButton("🔙 Back to hike details", callback_data=f'admin_hike_{hike_id}')]]
-#        reply_markup = InlineKeyboardMarkup(keyboard)
-#        
-#        update.message.reply_text(
-#            "What would you like to do next?",
-#            reply_markup=reply_markup
-#        )
-#        return ADMIN_MENU
-#        
-#    except ValueError:
-#        update.message.reply_text(
-#            "⚠️ Please enter a valid number (e.g., 15.50):"
-#        )
-#        return ADMIN_MAX_COST_PER_PARTICIPANT
+
 # End handlers for editing cost settings
 
 # Start handler dynamic fee
