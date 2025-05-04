@@ -285,6 +285,537 @@ def cmd_admin(update, context):
     )
     return ADMIN_MENU
 
+# Start def to manage cost menu
+def show_cost_control_menu(update, context):
+    """Show cost control management menu"""
+    query = update.callback_query
+    query.answer()
+    
+    # Check if admin
+    user_id = query.from_user.id
+    if not DBUtils.check_is_admin(user_id):
+        query.edit_message_text("⚠️ You don't have admin privileges to use this menu.")
+        return CHOOSING
+    
+    # Get existing costs
+    costs = DBUtils.get_fixed_costs()
+    
+    # Create and send keyboard
+    reply_markup = KeyboardBuilder.create_cost_control_keyboard(costs)
+    
+    query.edit_message_text(
+        "💰 *Cost Control Management*\n\n"
+        "Here you can manage fixed costs for your operation.\n\n"
+        "Select an existing cost to edit, or add a new one:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_COSTS
+
+def start_cost_creation(update, context):
+    """Start creating a new fixed cost"""
+    query = update.callback_query
+    query.answer()
+    
+    query.edit_message_text(
+        "📝 Please enter the name for this fixed cost:"
+    )
+    return COST_NAME
+
+def save_cost_name(update, context):
+    """Save cost name"""
+    cost_name = update.message.text.strip()
+    
+    if not cost_name:
+        update.message.reply_text(
+            "⚠️ Name cannot be empty. Please enter a valid name:"
+        )
+        return COST_NAME
+    
+    context.user_data['cost_name'] = cost_name
+    
+    # Ask for amount
+    update.message.reply_text(
+        "💰 Please enter the amount in euros (e.g., 15.50):"
+    )
+    return COST_AMOUNT
+
+def save_cost_amount(update, context):
+    """Save cost amount"""
+    amount_str = update.message.text.strip()
+    
+    try:
+        # Try to parse as float and validate
+        amount = float(amount_str.replace(',', '.'))
+        if amount < 0:
+            raise ValueError("Amount must be positive")
+            
+        context.user_data['cost_amount'] = amount
+        
+        # Ask for frequency
+        keyboard = [
+            [InlineKeyboardButton("Monthly", callback_data='new_frequency_monthly')],
+            [InlineKeyboardButton("Quarterly", callback_data='new_frequency_quarterly')],
+            [InlineKeyboardButton("Yearly", callback_data='new_frequency_yearly')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        update.message.reply_text(
+            "🔄 Please select the frequency of this cost:",
+            reply_markup=reply_markup
+        )
+        return COST_FREQUENCY
+        
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Please enter a valid positive number (e.g., 15.50):"
+        )
+        return COST_AMOUNT
+
+def save_cost_frequency(update, context):
+    """Save cost frequency"""
+    query = update.callback_query
+    query.answer()
+    
+    frequency = query.data.replace('new_frequency_', '')
+    context.user_data['cost_frequency'] = frequency
+    
+    # Ask for description
+    query.edit_message_text(
+        "🗒 Please enter a description for this cost (optional, press /skip to leave blank):"
+    )
+    return COST_DESCRIPTION
+
+def skip_cost_description(update, context):
+    """Skip providing a cost description"""
+    context.user_data['cost_description'] = ""
+    return save_cost_to_database(update, context)
+
+def save_cost_description(update, context):
+    """Save cost description and complete creation"""
+    context.user_data['cost_description'] = update.message.text
+    return save_cost_to_database(update, context)
+
+def save_cost_to_database(update, context):
+    """Save the complete cost to database"""
+    user_id = update.effective_user.id
+    
+    # Collect data from context
+    cost_data = {
+        'name': context.user_data.get('cost_name'),
+        'amount': context.user_data.get('cost_amount'),
+        'frequency': context.user_data.get('cost_frequency'),
+        'description': context.user_data.get('cost_description', '')
+    }
+    
+    # Save to database
+    result = DBUtils.add_fixed_cost(user_id, cost_data)
+    
+    if result['success']:
+        message = (
+            f"✅ Fixed cost created successfully!\n\n"
+            f"📝 Name: {cost_data['name']}\n"
+            f"💰 Amount: {cost_data['amount']}€\n"
+            f"🔄 Frequency: {cost_data['frequency']}\n"
+        )
+        
+        if cost_data['description']:
+            message += f"🗒 Description: {cost_data['description']}\n"
+        
+        # Create back button
+        keyboard = [[InlineKeyboardButton("🔙 Back to cost menu", callback_data='admin_costs')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if isinstance(update, telegram.Update) and update.message:
+            update.message.reply_text(message, reply_markup=reply_markup)
+        else:
+            context.bot.send_message(
+                chat_id=user_id,
+                text=message,
+                reply_markup=reply_markup
+            )
+    else:
+        error_message = f"❌ Failed to create cost: {result.get('error', 'Unknown error')}"
+        
+        # Create back button
+        keyboard = [[InlineKeyboardButton("🔙 Back to cost menu", callback_data='admin_costs')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if isinstance(update, telegram.Update) and update.message:
+            update.message.reply_text(error_message, reply_markup=reply_markup)
+        else:
+            context.bot.send_message(
+                chat_id=user_id,
+                text=error_message,
+                reply_markup=reply_markup
+            )
+    
+    return ADMIN_COSTS
+
+def handle_cost_selection(update, context):
+    """Handle selection of existing cost"""
+    query = update.callback_query
+    query.answer()
+    
+    # Extract cost ID from callback
+    cost_id = int(query.data.replace('edit_cost_', ''))
+    context.user_data['editing_cost_id'] = cost_id
+    
+    # Get cost details
+    costs = DBUtils.get_fixed_costs()
+    selected_cost = next((c for c in costs if c['id'] == cost_id), None)
+    
+    if not selected_cost:
+        query.edit_message_text(
+            "⚠️ Cost not found. It may have been deleted."
+        )
+        return show_cost_control_menu(update, context)
+    
+    # Create message
+    message = (
+        f"💰 *Fixed Cost Details*\n\n"
+        f"📝 Name: {selected_cost['name']}\n"
+        f"💰 Amount: {selected_cost['amount']}€\n"
+        f"🔄 Frequency: {selected_cost['frequency']}\n"
+    )
+    
+    if selected_cost.get('description'):
+        message += f"🗒 Description: {selected_cost['description']}\n"
+    
+    # Create keyboard for actions
+    reply_markup = KeyboardBuilder.create_cost_actions_keyboard(cost_id)
+    
+    query.edit_message_text(
+        message,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_COSTS
+
+def handle_cost_action(update, context):
+    """Handle actions for a specific cost"""
+    query = update.callback_query
+    query.answer()
+    
+    action = query.data.split('_')
+    cost_id = int(action[-1])
+    action_type = '_'.join(action[1:-1])  # edit_name, edit_amount, edit_frequency, edit_description, delete
+    
+    context.user_data['editing_cost_id'] = cost_id
+    
+    if action_type == 'edit_name':
+        query.edit_message_text(
+            "📝 Please enter the new name for this cost:"
+        )
+        return COST_NAME
+        
+    elif action_type == 'edit_amount':
+        query.edit_message_text(
+            "💰 Please enter the new amount in euros (e.g., 15.50):"
+        )
+        return COST_AMOUNT
+        
+    elif action_type == 'edit_frequency':
+        # Show frequency selection keyboard
+        reply_markup = KeyboardBuilder.create_frequency_keyboard(cost_id)
+        query.edit_message_text(
+            "🔄 Please select the new frequency:",
+            reply_markup=reply_markup
+        )
+        return COST_FREQUENCY
+        
+    elif action_type == 'edit_description':
+        query.edit_message_text(
+            "🗒 Please enter a new description for this cost (or send /skip to clear):"
+        )
+        return COST_DESCRIPTION
+        
+    elif action_type == 'delete':
+        # Confirm deletion
+        keyboard = [
+            [
+                InlineKeyboardButton("Yes, Delete ✅", callback_data=f'confirm_delete_cost_{cost_id}'),
+                InlineKeyboardButton("No, Cancel ❌", callback_data=f'edit_cost_{cost_id}')
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        query.edit_message_text(
+            "❓ Are you sure you want to delete this cost?\n\n"
+            "This action cannot be undone.",
+            reply_markup=reply_markup
+        )
+        return ADMIN_COSTS
+    
+    return ADMIN_COSTS
+
+def delete_cost(update, context):
+    """Delete a fixed cost"""
+    query = update.callback_query
+    query.answer()
+    
+    cost_id = int(query.data.replace('confirm_delete_cost_', ''))
+    user_id = query.from_user.id
+    
+    # Delete from database
+    result = DBUtils.delete_fixed_cost(cost_id, user_id)
+    
+    if result['success']:
+        query.edit_message_text(
+            "✅ Fixed cost has been deleted successfully."
+        )
+    else:
+        query.edit_message_text(
+            f"❌ Failed to delete cost: {result.get('error', 'Unknown error')}"
+        )
+    
+    # Return to cost menu
+    context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="Returning to cost menu...",
+        reply_markup=KeyboardBuilder.create_cost_control_keyboard(DBUtils.get_fixed_costs())
+    )
+    return ADMIN_COSTS
+
+def update_cost_name(update, context):
+    """Update name for existing cost"""
+    cost_id = context.user_data.get('editing_cost_id')
+    if not cost_id:
+        update.message.reply_text("❌ Error: Cost ID not found. Please try again.")
+        return show_cost_control_menu(update, context)
+    
+    new_name = update.message.text.strip()
+    
+    if not new_name:
+        update.message.reply_text(
+            "⚠️ Name cannot be empty. Please enter a valid name:"
+        )
+        return COST_NAME
+    
+    # Update in database
+    result = DBUtils.update_fixed_cost(
+        cost_id, 
+        update.effective_user.id,
+        {'name': new_name}
+    )
+    
+    if result['success']:
+        update.message.reply_text(f"✅ Cost name updated to '{new_name}'.")
+    else:
+        update.message.reply_text(f"❌ Failed to update: {result.get('error', 'Unknown error')}")
+        
+    # Show cost menu again
+    reply_markup = KeyboardBuilder.create_cost_control_keyboard(DBUtils.get_fixed_costs())
+    update.message.reply_text(
+        "💰 *Cost Control Management*\n\n"
+        "Select an existing cost to edit, or add a new one:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_COSTS
+
+def update_cost_amount(update, context):
+    """Update amount for existing cost"""
+    cost_id = context.user_data.get('editing_cost_id')
+    if not cost_id:
+        update.message.reply_text("❌ Error: Cost ID not found. Please try again.")
+        return show_cost_control_menu(update, context)
+    
+    amount_str = update.message.text.strip()
+    
+    try:
+        # Try to parse as float and validate
+        amount = float(amount_str.replace(',', '.'))
+        if amount < 0:
+            raise ValueError("Amount must be positive")
+            
+        # Update in database
+        result = DBUtils.update_fixed_cost(
+            cost_id, 
+            update.effective_user.id,
+            {'amount': amount}
+        )
+        
+        if result['success']:
+            update.message.reply_text(f"✅ Cost amount updated to {amount}€.")
+        else:
+            update.message.reply_text(f"❌ Failed to update: {result.get('error', 'Unknown error')}")
+            
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Please enter a valid positive number (e.g., 15.50):"
+        )
+        return COST_AMOUNT
+    
+    # Show cost menu again
+    reply_markup = KeyboardBuilder.create_cost_control_keyboard(DBUtils.get_fixed_costs())
+    update.message.reply_text(
+        "💰 *Cost Control Management*\n\n"
+        "Select an existing cost to edit, or add a new one:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_COSTS
+
+def update_cost_frequency(update, context):
+    """Update frequency for existing cost"""
+    query = update.callback_query
+    query.answer()
+    
+    cost_id = context.user_data.get('editing_cost_id')
+    if not cost_id:
+        query.edit_message_text("❌ Error: Cost ID not found. Please try again.")
+        return show_cost_control_menu(update, context)
+    
+    # Get the frequency from callback data
+    data_parts = query.data.split('_')
+    frequency = data_parts[1]
+    
+    # Update in database
+    result = DBUtils.update_fixed_cost(
+        cost_id, 
+        query.from_user.id,
+        {'frequency': frequency}
+    )
+    
+    if result['success']:
+        query.edit_message_text(f"✅ Cost frequency updated to '{frequency}'.")
+    else:
+        query.edit_message_text(f"❌ Failed to update: {result.get('error', 'Unknown error')}")
+    
+    # Show cost menu again
+    reply_markup = KeyboardBuilder.create_cost_control_keyboard(DBUtils.get_fixed_costs())
+    context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="💰 *Cost Control Management*\n\n"
+            "Select an existing cost to edit, or add a new one:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_COSTS
+
+def update_cost_description(update, context):
+    """Update description for existing cost"""
+    cost_id = context.user_data.get('editing_cost_id')
+    if not cost_id:
+        update.message.reply_text("❌ Error: Cost ID not found. Please try again.")
+        return show_cost_control_menu(update, context)
+    
+    description = update.message.text
+    
+    # Update in database
+    result = DBUtils.update_fixed_cost(
+        cost_id, 
+        update.effective_user.id,
+        {'description': description}
+    )
+    
+    if result['success']:
+        update.message.reply_text("✅ Cost description updated successfully.")
+    else:
+        update.message.reply_text(f"❌ Failed to update: {result.get('error', 'Unknown error')}")
+    
+    # Show cost menu again
+    reply_markup = KeyboardBuilder.create_cost_control_keyboard(DBUtils.get_fixed_costs())
+    update.message.reply_text(
+        "💰 *Cost Control Management*\n\n"
+        "Select an existing cost to edit, or add a new one:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_COSTS
+
+def skip_cost_description_update(update, context):
+    """Skip providing a description, clearing the existing one"""
+    cost_id = context.user_data.get('editing_cost_id')
+    if not cost_id:
+        update.message.reply_text("❌ Error: Cost ID not found. Please try again.")
+        return show_cost_control_menu(update, context)
+    
+    # Update in database with empty description
+    result = DBUtils.update_fixed_cost(
+        cost_id, 
+        update.effective_user.id,
+        {'description': ""}
+    )
+    
+    if result['success']:
+        update.message.reply_text("✅ Cost description cleared successfully.")
+    else:
+        update.message.reply_text(f"❌ Failed to update: {result.get('error', 'Unknown error')}")
+    
+    # Show cost menu again
+    reply_markup = KeyboardBuilder.create_cost_control_keyboard(DBUtils.get_fixed_costs())
+    update.message.reply_text(
+        "💰 *Cost Control Management*\n\n"
+        "Select an existing cost to edit, or add a new one:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_COSTS
+
+def show_cost_summary(update, context):
+    """Show summary of all costs by frequency"""
+    query = update.callback_query
+    query.answer()
+    
+    # Get summary from database
+    summary = DBUtils.get_cost_summary()
+    costs = DBUtils.get_fixed_costs()
+    
+    # Calculate yearly projection
+    total_monthly = next((s['total_amount'] for s in summary if s['frequency'] == 'monthly'), 0)
+    total_quarterly = next((s['total_amount'] for s in summary if s['frequency'] == 'quarterly'), 0)
+    total_yearly = next((s['total_amount'] for s in summary if s['frequency'] == 'yearly'), 0)
+    
+    yearly_projection = (total_monthly * 12) + (total_quarterly * 4) + total_yearly
+    
+    # Create detailed message
+    message = "📊 *Cost Summary*\n\n"
+    
+    # Group costs by frequency
+    costs_by_frequency = {}
+    for cost in costs:
+        freq = cost['frequency']
+        if freq not in costs_by_frequency:
+            costs_by_frequency[freq] = []
+        costs_by_frequency[freq].append(cost)
+    
+    # Show costs grouped by frequency
+    frequencies = ['monthly', 'quarterly', 'yearly']
+    for freq in frequencies:
+        if freq in costs_by_frequency:
+            freq_costs = costs_by_frequency[freq]
+            freq_total = sum(c['amount'] for c in freq_costs)
+            
+            freq_title = freq.capitalize()
+            message += f"*{freq_title} Costs:* {freq_total}€\n"
+            
+            for cost in freq_costs:
+                message += f"• {cost['name']}: {cost['amount']}€\n"
+            
+            message += "\n"
+    
+    # Add projections
+    message += "*Yearly Projection:*\n"
+    message += f"• Monthly costs (x12): {total_monthly * 12}€\n"
+    message += f"• Quarterly costs (x4): {total_quarterly * 4}€\n"
+    message += f"• Yearly costs: {total_yearly}€\n"
+    message += f"• Total yearly cost: {yearly_projection}€\n"
+    
+    # Add back button
+    keyboard = [[InlineKeyboardButton("🔙 Back to cost menu", callback_data='admin_costs')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    query.edit_message_text(
+        message,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_COSTS
+    
+# End def to manage cost menu
+
 # Start def to manage personal profile
 def show_profile_menu(update, context):
     """Show profile menu options"""
