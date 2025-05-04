@@ -57,6 +57,7 @@ class KeyboardBuilder:
             [InlineKeyboardButton("Create new hike 🏔️", callback_data='admin_create_hike')],
             [InlineKeyboardButton("Manage existing hikes 📝", callback_data='admin_manage_hikes')],
             [InlineKeyboardButton("Schedule maintenance 🔧", callback_data='admin_maintenance')],
+            [InlineKeyboardButton("Cost Control 💰", callback_data='admin_costs')],
             [InlineKeyboardButton("Query Database 🔍", callback_data='query_db')],
             [InlineKeyboardButton("Add admin 👑", callback_data='admin_add_admin')],
             [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
