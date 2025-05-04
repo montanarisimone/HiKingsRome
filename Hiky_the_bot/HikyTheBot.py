@@ -61,7 +61,7 @@ logger.info(f"Using python-telegram-bot version: {telegram.__version__}")
  PROFILE_MENU, PROFILE_EDIT, PROFILE_NAME, PROFILE_SURNAME, PROFILE_EMAIL,  PROFILE_PHONE, PROFILE_BIRTH_DATE,
  ADMIN_MAINTENANCE, MAINTENANCE_DATE, MAINTENANCE_START_TIME, MAINTENANCE_END_TIME, MAINTENANCE_REASON,
  ADMIN_QUERY_DB, ADMIN_QUERY_EXECUTE, ADMIN_QUERY_SAVE, ADMIN_QUERY_DELETE, ADMIN_QUERY_NAME, 
- ADMIN_COSTS, COST_NAME, COST_AMOUNT, COST_FREQUENCY, COST_DESCRIPTION) = range(52)
+ ADMIN_COSTS, COST_NAME, COST_AMOUNT, COST_FREQUENCY, COST_DESCRIPTION, ADMIN_HIKE_VARIABLE_COSTS) = range(53)
 
 # Define timezone for Rome (for consistent timestamps)
 rome_tz = pytz.timezone('Europe/Rome')
@@ -3806,6 +3806,10 @@ def admin_save_description(update, context):
     
     # Format date for display
     display_date = datetime.strptime(hike_data['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+
+    # Format variable costs with two decimal places
+    variable_costs = hike_data.get('variable_costs', 0)
+    variable_costs_display = f"{variable_costs:.2f}"
     
     summary = (
         f"🏔️ *New Hike Summary*\n\n"
@@ -3815,6 +3819,7 @@ def admin_save_description(update, context):
         f"Max Participants: {hike_data['max_participants']}\n"
         f"Location: {hike_data['latitude']}, {hike_data['longitude']}\n"
         f"Difficulty: {hike_data['difficulty']}\n\n"
+        f"Variable Costs: {variable_costs_display}€\n\n"
         f"Description:\n{hike_data['description']}\n\n"
         f"Is this correct?"
     )
@@ -3849,6 +3854,7 @@ def admin_confirm_hike(update, context):
             'latitude': context.user_data.get('latitude'),
             'longitude': context.user_data.get('longitude'),
             'difficulty': context.user_data.get('difficulty'),
+            'variable_costs': context.user_data.get('variable_costs', 0),
             'description': context.user_data.get('description')
         }
         
@@ -5322,6 +5328,11 @@ def main():
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(admin_save_difficulty, pattern='^difficulty_')
+            ],
+            ADMIN_HIKE_VARIABLE_COSTS: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                MessageHandler(Filters.text & ~Filters.command, admin_save_variable_costs)
             ],
             ADMIN_HIKE_DESCRIPTION: [
                 CommandHandler('menu', menu),
