@@ -47,8 +47,17 @@ This document outlines the development plan for HiKingsRome Bot, tracking comple
     - Custom query creation and saving functionality
     - Query execution with safety filters to prevent SQL injection
     - Query result formatting and display
+  - [x] Hike management system:
+    - Create new hikes with name, date, difficulty levels, locations, and participant limits
+    - Manage existing hikes (view, cancel, reactivate)
+    - View detailed participant lists with contact information
+    - Set different guide quotas for each hike
   - [x] Automatic designation of admins as guides when they register for hikes
-  - [x] Added system for scheduling and announcing maintenance periods
+  - [x] Maintenance scheduling with:
+    - Date, start time, end time, and reason fields
+    - Automated notifications to all users before maintenance
+    - Ability to edit or cancel scheduled maintenanc
+  - [x] Admin user management with ability to promote regular users to admin status
  
 - **User Features**
   - [x] Inline keyboards for navigation
