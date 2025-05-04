@@ -317,7 +317,7 @@ class KeyboardBuilder:
         """Create keyboard for admin options for a specific hike"""
         keyboard = [
             [InlineKeyboardButton("👥 View participants", callback_data=f'admin_participants_{hike_id}')],
-            [InlineKeyboardButton("💰 Edit cost settings", callback_data=f'admin_edit_costs_{hike_id}')],
+            [InlineKeyboardButton("💰 Edit cost settings", callback_data=f'admin_costs_{hike_id}')],
             [InlineKeyboardButton("💵 Manage dynamic fees", callback_data=f'admin_dynamic_fees_{hike_id}')]
         ]
         
