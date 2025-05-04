@@ -352,6 +352,10 @@ def start_cost_creation(update, context):
     logger.info(f"start_cost_creation called by user {query.from_user.id}")
 
     try:
+        # Clear any existing editing_cost_id to avoid confusion
+        if 'editing_cost_id' in context.user_data:
+            del context.user_data['editing_cost_id']
+            
         query.edit_message_text(
             "📝 Please enter the name for this fixed cost:"
         )
