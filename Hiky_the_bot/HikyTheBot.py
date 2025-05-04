@@ -60,7 +60,8 @@ logger.info(f"Using python-telegram-bot version: {telegram.__version__}")
  ADMIN_HIKE_DESCRIPTION, ADMIN_CONFIRM_HIKE, ADMIN_ADD_ADMIN, DONATION, ADMIN_HIKE_GUIDES,
  PROFILE_MENU, PROFILE_EDIT, PROFILE_NAME, PROFILE_SURNAME, PROFILE_EMAIL,  PROFILE_PHONE, PROFILE_BIRTH_DATE,
  ADMIN_MAINTENANCE, MAINTENANCE_DATE, MAINTENANCE_START_TIME, MAINTENANCE_END_TIME, MAINTENANCE_REASON,
- ADMIN_QUERY_DB, ADMIN_QUERY_EXECUTE, ADMIN_QUERY_SAVE, ADMIN_QUERY_DELETE, ADMIN_QUERY_NAME) = range(47)
+ ADMIN_QUERY_DB, ADMIN_QUERY_EXECUTE, ADMIN_QUERY_SAVE, ADMIN_QUERY_DELETE, ADMIN_QUERY_NAME, 
+ ADMIN_COSTS, COST_NAME, COST_AMOUNT, COST_FREQUENCY, COST_DESCRIPTION) = range(52)
 
 # Define timezone for Rome (for consistent timestamps)
 rome_tz = pytz.timezone('Europe/Rome')
@@ -2428,6 +2429,9 @@ def handle_admin_choice(update, context):
             reply_markup=reply_markup
         )
         return ADMIN_MENU
+
+    elif query.data == 'admin_costs':
+        return show_cost_control_menu(update, context)
 
     elif query.data == 'back_to_admin':
         reply_markup = KeyboardBuilder.create_admin_keyboard()
