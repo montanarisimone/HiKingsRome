@@ -1038,6 +1038,9 @@ def handle_edit_cost_settings(update, context):
     """Handle editing of hike cost settings"""
     query = update.callback_query
     query.answer()
+
+    logger.info(f"Edit costs callback data: {query.data}")
+    logger.info(f"Split result: {query.data.split('_')}")
     
     hike_id = int(query.data.split('_')[-1])
     context.user_data['editing_hike_id'] = hike_id
