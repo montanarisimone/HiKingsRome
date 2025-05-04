@@ -316,7 +316,8 @@ class KeyboardBuilder:
     def create_admin_hike_options_keyboard(hike_id, is_active):
         """Create keyboard for admin options for a specific hike"""
         keyboard = [
-            [InlineKeyboardButton("👥 View participants", callback_data=f'admin_participants_{hike_id}')]
+            [InlineKeyboardButton("👥 View participants", callback_data=f'admin_participants_{hike_id}')],
+            [InlineKeyboardButton("💰 Edit cost settings", callback_data=f'admin_edit_costs_{hike_id}')]
         ]
         
         # Show edit and cancel options only for active hikes
