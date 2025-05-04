@@ -5446,30 +5446,47 @@ def show_hike_signup_details(update, context, hike_id):
     
     # Format date for display
     hike_date = datetime.strptime(hike['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+
+    # Check if user is admin/guide for fee display
+    user_id = update.effective_user.id
+    is_admin = DBUtils.check_is_admin(user_id)
+    is_guide = is_admin or (DBUtils.get_user_profile(user_id) or {}).get('is_guide', False)
     
     # Get fee information
     if hike['fee_locked']:
-        fee_message = f"🔒 Fixed Fee: {hike['final_participant_fee']:.2f}€"
+        fee = hike['final_guide_fee'] if is_guide else hike['final_participant_fee']
+        fee = math.ceil(fee)
+        fee_message = f"🔒 Fixed Fee: {fee:.2f}€"
+        if is_guide:
+            fee_message += " (guide rate)"
     else:
         # Calculate current estimated fee
-        fee_data = DBUtils.calculate_dynamic_fees(hike_id, context.bot.id)
+        fee_data = DBUtils.calculate_dynamic_fees(hike_id, user_id if is_admin else context.bot.id)
         
         if fee_data.get('success', False):
-            current_fee = fee_data.get('participant_fee', 0)
+            current_fee = fee_data.get('guide_fee', 0) if is_guide else fee_data.get('participant_fee', 0)
             current_fee = math.ceil(current_fee)
             fee_message = f"💰 Estimated Fee: {current_fee:.2f}€ (may change based on attendance)"
+            if is_guide:
+                fee_message += " (guide rate)"
         else:
             # Fall back to fee range
             hike_data = dict(hike)
             monthly_fixed_costs = DBUtils.get_monthly_fixed_costs()
             fee_range = DBUtils.calculate_fee_ranges(hike_data, monthly_fixed_costs)
             
-            fee_min = round(fee_range['participant_fee_min'], 2)
-            fee_min = math.ceil(fee_min)
-            fee_max = round(fee_range['participant_fee_max'], 2)
-            fee_max = math.ceil(fee_max)
-            
-            fee_message = f"💰 Estimated Fee Range: {fee_min:.2f}€ - {fee_max:.2f}€"
+            if is_guide:
+                fee_min = round(fee_range['guide_fee_min'], 2)
+                fee_min = math.ceil(fee_min)
+                fee_max = round(fee_range['guide_fee_max'], 2)
+                fee_max = math.ceil(fee_max)
+                fee_message = f"💰 Estimated Fee Range: {fee_min:.2f}€ - {fee_max:.2f}€ (guide rate)"
+            else:
+                fee_min = round(fee_range['participant_fee_min'], 2)
+                fee_min = math.ceil(fee_min)
+                fee_max = round(fee_range['participant_fee_max'], 2)
+                fee_max = math.ceil(fee_max)
+                fee_message = f"💰 Estimated Fee Range: {fee_min:.2f}€ - {fee_max:.2f}€"
     
     # Create signup keyboard
     keyboard = [
@@ -5501,6 +5518,27 @@ def show_hike_details(update, context):
         hike_date = datetime.strptime(hike['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
     else:
         hike_date = hike['hike_date'].strftime('%d/%m/%Y')
+
+    # Check if user is admin/guide for fee display
+    user_id = update.effective_user.id
+    is_admin = DBUtils.check_is_admin(user_id)
+    is_guide = is_admin or (DBUtils.get_user_profile(user_id) or {}).get('is_guide', False)
+    
+    # Get fee information
+    fee_info = ""
+    fee_data = DBUtils.calculate_dynamic_fees(hike['hike_id'], user_id if is_admin else context.bot.id)
+    
+    if fee_data.get('success', False):
+        # Check if fees are locked
+        if fee_data.get('is_locked', False):
+            fee = fee_data.get('guide_fee', 0) if is_guide else fee_data.get('participant_fee', 0)
+            fee = math.ceil(fee)
+            fee_info = f"💰 *Fee:* {fee:.2f}€ (fixed)\n"
+        else:
+            # Use current calculated fee based on current attendance
+            fee = fee_data.get('guide_fee', 0) if is_guide else fee_data.get('participant_fee', 0)
+            fee = math.ceil(fee)
+            fee_info = f"💰 *Estimated Fee:* {fee:.2f}€ (may change)\n"
         
     # Create navigation buttons
     reply_markup = KeyboardBuilder.create_hike_navigation_keyboard(current_index, len(hikes))
@@ -5509,6 +5547,7 @@ def show_hike_details(update, context):
     message_text = (
         f"🗓 *Date:* {hike_date}\n"
         f"🏃 *Hike:* {hike['hike_name']}\n"
+        f"{fee_info}"
         f"🚗 *Car sharing:* {'Yes' if hike.get('car_sharing') else 'No'}\n\n"
         f"Hike {current_index + 1} of {len(hikes)}"
     )
@@ -5636,8 +5675,28 @@ def show_hike_calendar(update, context):
             
             # Add difficulty if available
             difficulty = f" - {hike['difficulty']}" if hike.get('difficulty') else ""
+
+            # Get fee information
+            is_admin = DBUtils.check_is_admin(user_id)
+            is_guide = is_admin or (DBUtils.get_user_profile(user_id) or {}).get('is_guide', False)
+
+            # Calculate the most up-to-date fee
+            fee_info = ""
+            fee_data = DBUtils.calculate_dynamic_fees(hike['id'], user_id if is_admin else context.bot.id)
             
-            calendar_message += f"• {day_name} {date_str}: {hike['hike_name']}{difficulty} ({status})\n"
+            if fee_data.get('success', False):
+                # Check if fees are locked
+                if fee_data.get('is_locked', False):
+                    fee = fee_data.get('guide_fee', 0) if is_guide else fee_data.get('participant_fee', 0)
+                    fee = math.ceil(fee)
+                    fee_info = f" - 💰 {fee:.2f}€"
+                else:
+                    # Use current calculated fee based on current attendance
+                    fee = fee_data.get('guide_fee', 0) if is_guide else fee_data.get('participant_fee', 0)
+                    fee = math.ceil(fee)
+                    fee_info = f" - 💰 ~{fee:.2f}€"
+            
+            calendar_message += f"• {day_name} {date_str}: {hike['hike_name']}{difficulty} {fee_info} ({status})\n"
         
         calendar_message += "\n"
     
@@ -5889,7 +5948,41 @@ def save_medical(update, context):
     
     # Get available hikes
     available_hikes = context.user_data['available_hikes']
+    user_id = update.effective_user.id
+    is_admin = DBUtils.check_is_admin(user_id)
+    is_guide = is_admin or (DBUtils.get_user_profile(user_id) or {}).get('is_guide', False)
+
+    # Create fee information message for each hike
+    fee_info_message = "💰 *Fee Information*\n\n"
+    for idx, hike in enumerate(available_hikes):
+        # Calculate fee for this hike
+        fee_data = DBUtils.calculate_dynamic_fees(hike['id'], user_id if is_admin else context.bot.id)
+        hike_date = datetime.strptime(hike['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+        
+        if fee_data.get('success', False):
+            if fee_data.get('is_locked', False):
+                fee = fee_data.get('guide_fee', 0) if is_guide else fee_data.get('participant_fee', 0)
+                fee = math.ceil(fee)
+                fee_info_message += f"• {hike_date} - {hike['hike_name']}: {fee:.2f}€ (fixed)"
+                if is_guide:
+                    fee_info_message += " (guide rate)"
+                fee_info_message += "\n"
+            else:
+                fee = fee_data.get('guide_fee', 0) if is_guide else fee_data.get('participant_fee', 0)
+                fee = math.ceil(fee)
+                fee_info_message += f"• {hike_date} - {hike['hike_name']}: ~{fee:.2f}€"
+                if is_guide:
+                    fee_info_message += " (guide rate)"
+                fee_info_message += "\n"
+
+    fee_info_message += "\n_Fees may change based on final attendance unless marked as fixed._\n\n"
+        
     reply_markup = KeyboardBuilder.create_hikes_selection_keyboard(available_hikes)
+
+    update.message.reply_text(
+        fee_info_message,
+        parse_mode='Markdown'
+    )
     
     update.message.reply_text(
         "🎯 Choose the hike(s) you want to participate in:\n\n"
