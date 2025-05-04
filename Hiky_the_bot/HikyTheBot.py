@@ -4214,6 +4214,11 @@ def handle_admin_choice(update, context):
     elif query.data.startswith('admin_dynamic_fees_'):
         return handle_dynamic_fees(update, context)
 
+    # Add handler for payment report callback
+    elif query.data.startswith('payment_report_'):
+        hike_id = int(query.data.replace('payment_report_', ''))
+        return send_payment_report(update, context, hike_id)
+
     elif query.data == 'back_to_admin':
         reply_markup = KeyboardBuilder.create_admin_keyboard()
         
