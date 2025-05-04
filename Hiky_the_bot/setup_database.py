@@ -56,6 +56,7 @@ def setup_database():
         latitude REAL,
         longitude REAL,
         difficulty TEXT,
+        variable_costs REAL DEFAULT 0,
         description TEXT,
         created_by INTEGER,
         is_active BOOLEAN DEFAULT 1,
@@ -121,8 +122,6 @@ def setup_database():
         FOREIGN KEY (created_by) REFERENCES users(telegram_id)
     )
     ''')
-
-    # Dopo la tabella maintenance, aggiungi:
 
     # Create fixed_costs table
     cursor.execute('''
