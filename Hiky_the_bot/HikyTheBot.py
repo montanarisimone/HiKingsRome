@@ -308,67 +308,128 @@ def show_cost_control_menu(update, context):
     """Show cost control management menu"""
     query = update.callback_query
     query.answer()
+
+    logger.info(f"show_cost_control_menu called by user {query.from_user.id}")
     
     # Check if admin
     user_id = query.from_user.id
     if not DBUtils.check_is_admin(user_id):
+        logger.warning(f"User {user_id} attempted to access the cost menu without admin privileges")
         query.edit_message_text("⚠️ You don't have admin privileges to use this menu.")
         return CHOOSING
+
+    try:
+        # Get existing costs
+        logger.info("Recovering fixed costs from the database...")
+        costs = DBUtils.get_fixed_costs()
+        logger.info(f"Recovered {len(costs)} fixed costs")
+        
+        # Create and send keyboard
+        reply_markup = KeyboardBuilder.create_cost_control_keyboard(costs)
     
-    # Get existing costs
-    costs = DBUtils.get_fixed_costs()
-    
-    # Create and send keyboard
-    reply_markup = KeyboardBuilder.create_cost_control_keyboard(costs)
-    
-    query.edit_message_text(
-        "💰 *Cost Control Management*\n\n"
-        "Here you can manage fixed costs for your operation.\n\n"
-        "Select an existing cost to edit, or add a new one:",
-        parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
-    return ADMIN_COSTS
+        query.edit_message_text(
+            "💰 *Cost Control Management*\n\n"
+            "Here you can manage fixed costs for your operation.\n\n"
+            "Select an existing cost to edit, or add a new one:",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        logger.info("Cost management menu successfully displayed")
+        return ADMIN_COSTS
+        
+    except Exception as e:
+        logger.error(f"Error in show_cost_control_menu: {e}")
+        query.edit_message_text(
+            "⚠️ An error occurred while displaying the cost management menu."
+        )
+        return ADMIN_MENU
 
 def start_cost_creation(update, context):
     """Start creating a new fixed cost"""
     query = update.callback_query
     query.answer()
-    
-    query.edit_message_text(
-        "📝 Please enter the name for this fixed cost:"
-    )
-    return COST_NAME
+
+    logger.info(f"start_cost_creation called by user {query.from_user.id}")
+
+    try:
+        query.edit_message_text(
+            "📝 Please enter the name for this fixed cost:"
+        )
+        logger.info("Name entry request for new fixed cost")
+        return COST_NAME
+        
+    except Exception as e:
+        logger.error(f"Error in start_cost_creation: {e}")
+        query.edit_message_text(
+            "⚠️ An error occurred. Please try again later."
+        )
+        return ADMIN_COSTS
 
 def save_cost_name(update, context):
     """Save cost name"""
+    user_id = update.effective_user.id
+    logger.info(f"save_cost_name called by user {user_id}")
+    
     cost_name = update.message.text.strip()
+    logger.info(f"Cost name entered: '{cost_name}'")
     
     if not cost_name:
+        logger.warning("Cost name empty, request again")
         update.message.reply_text(
             "⚠️ Name cannot be empty. Please enter a valid name:"
         )
         return COST_NAME
     
-    context.user_data['cost_name'] = cost_name
-    
-    # Ask for amount
-    update.message.reply_text(
-        "💰 Please enter the amount in euros (e.g., 15.50):"
-    )
-    return COST_AMOUNT
+    try:
+        context.user_data['cost_name'] = cost_name
+        logger.info(f"Cost name '{cost_name}' saved in user_data")
+        
+        # Ask for amount
+        update.message.reply_text(
+            "💰 Please enter the amount in euros (e.g., 15.50):"
+        )
+        logger.info("Request input amount")
+        return COST_AMOUNT
+        
+    except Exception as e:
+        logger.error(f"Error in save_cost_name: {e}")
+        update.message.reply_text(
+            "⚠️ An error occurred. Please try again later."
+        )
+        # Prova a recuperare tornando al menu costi
+        reply_markup = KeyboardBuilder.create_cost_control_keyboard(DBUtils.get_fixed_costs())
+        update.message.reply_text(
+            "Returning to cost menu...",
+            reply_markup=reply_markup
+        )
+        return ADMIN_COSTS
 
 def save_cost_amount(update, context):
     """Save cost amount"""
+    user_id = update.effective_user.id
+    logger.info(f"save_cost_amount called by user {user_id}")
+    
     amount_str = update.message.text.strip()
+    logger.info(f"Amount entered: '{amount_str}'")
     
     try:
         # Try to parse as float and validate
-        amount = float(amount_str.replace(',', '.'))
+        cleaned_amount = amount_str.replace(',', '.')
+        # Check that there are no more points after replacement
+        if cleaned_amount.count('.') > 1:
+            logger.warning(f"Invalid number format (too many dots): {cleaned_amount}")
+            raise ValueError("Invalid number format (too many decimal points)")
+        
+        # Try to parse as float and validate
+        amount = float(cleaned_amount)
+        logger.info(f"Amount converted to float: {amount}")
+        
         if amount < 0:
+            logger.warning(f"Negative amount: {amount}, request new entry")
             raise ValueError("Amount must be positive")
             
         context.user_data['cost_amount'] = amount
+        logger.info(f"Amount {amount} saved in user_data")
         
         # Ask for frequency
         keyboard = [
@@ -382,11 +443,19 @@ def save_cost_amount(update, context):
             "🔄 Please select the frequency of this cost:",
             reply_markup=reply_markup
         )
+        logger.info("Frequency selection request")
         return COST_FREQUENCY
         
-    except ValueError:
+    except ValueError as e:
+        logger.error(f"Error parsing amoun: {e}")
         update.message.reply_text(
             "⚠️ Please enter a valid positive number (e.g., 15.50):"
+        )
+        return COST_AMOUNT
+    except Exception as e:
+        logger.error(f"Generic error in save_cost_amount: {e}")
+        update.message.reply_text(
+            "⚠️ An unexpected error occurred. Please try again."
         )
         return COST_AMOUNT
 
