@@ -1043,13 +1043,17 @@ def handle_edit_cost_settings(update, context):
     callback_data = query.data
 
     # Log the full callback data for debugging
-    logger.info(f"Edit costs callback data: {query.data}")
+    logger.info(f"Edit costs callback data: {callback_data}")
 
-    match = re.search(r'_(\d+)$', callback_query.data)
+    match = re.match(r"(.+)_([0-9]+)$", callback_data)
     if match:
-        hike_id = int(match.group(1))
+        action = match.group(1)
+        hike_id = int(match.group(2))
+        context.user_data['editing_hike_id'] = hike_id
+        logger.info(f"Action: {action}, Hike ID: {hike_id}")
     else:
-        print(f"Errore: callback_data has not a numeric value: {callback_query.data}")
+        logger.error(f"Errore: callback_data has not a numeric value: {callback_data}")
+        query.edit_message_text("An error occurred while processing the request.")
         return
         
     context.user_data['editing_hike_id'] = hike_id
