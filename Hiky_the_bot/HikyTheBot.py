@@ -4227,6 +4227,9 @@ def handle_admin_choice(update, context):
     elif query.data == 'admin_costs':
         return show_cost_control_menu(update, context)
 
+    elif query.data.startswith('admin_edit_costs_'):
+        return handle_edit_cost_settings(update, context)
+
     elif query.data.startswith('admin_dynamic_fees_'):
         return handle_dynamic_fees(update, context)
 
