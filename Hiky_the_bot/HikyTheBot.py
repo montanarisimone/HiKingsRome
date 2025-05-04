@@ -5019,6 +5019,53 @@ def main():
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(admin_confirm_hike, pattern='^(confirm_create_hike|cancel_create_hike)$')
             ],
+            ADMIN_COSTS: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(start_cost_creation, pattern='^add_cost$'),
+                CallbackQueryHandler(show_cost_summary, pattern='^cost_summary$'),
+                CallbackQueryHandler(handle_cost_selection, pattern='^edit_cost_\\d+$'),
+                CallbackQueryHandler(handle_cost_action, pattern='^cost_'),
+                CallbackQueryHandler(update_cost_frequency, pattern='^frequency_'),
+                CallbackQueryHandler(delete_cost, pattern='^confirm_delete_cost_\\d+$'),
+                CallbackQueryHandler(handle_admin_choice, pattern='^back_to_admin$'),
+                CallbackQueryHandler(handle_admin_choice, pattern='^admin_costs$'),
+                CallbackQueryHandler(menu, pattern='^back_to_menu$')
+            ],
+            COST_NAME: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CommandHandler('cancel', lambda u, c: show_cost_control_menu(u, c)),
+                MessageHandler(Filters.text & ~Filters.command, 
+                              lambda u, c: update_cost_name(u, c) if 'editing_cost_id' in c.user_data 
+                                         else save_cost_name(u, c))
+            ],
+            COST_AMOUNT: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CommandHandler('cancel', lambda u, c: show_cost_control_menu(u, c)),
+                MessageHandler(Filters.text & ~Filters.command, 
+                              lambda u, c: update_cost_amount(u, c) if 'editing_cost_id' in c.user_data 
+                                         else save_cost_amount(u, c))
+            ],
+            COST_FREQUENCY: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CommandHandler('cancel', lambda u, c: show_cost_control_menu(u, c)),
+                CallbackQueryHandler(update_cost_frequency, pattern='^frequency_'),
+                CallbackQueryHandler(save_cost_frequency, pattern='^new_frequency_')
+            ],
+            COST_DESCRIPTION: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CommandHandler('cancel', lambda u, c: show_cost_control_menu(u, c)),
+                CommandHandler('skip', 
+                              lambda u, c: skip_cost_description_update(u, c) if 'editing_cost_id' in c.user_data 
+                                         else skip_cost_description(u, c)),
+                MessageHandler(Filters.text & ~Filters.command, 
+                              lambda u, c: update_cost_description(u, c) if 'editing_cost_id' in c.user_data 
+                                         else save_cost_description(u, c))
+            ], 
             ADMIN_ADD_ADMIN: [
                 CommandHandler('menu', menu),
                 CommandHandler('restart', restart),
