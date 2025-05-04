@@ -462,16 +462,39 @@ def save_cost_amount(update, context):
 def save_cost_frequency(update, context):
     """Save cost frequency"""
     query = update.callback_query
-    query.answer()
-    
-    frequency = query.data.replace('new_frequency_', '')
-    context.user_data['cost_frequency'] = frequency
-    
-    # Ask for description
-    query.edit_message_text(
-        "🗒 Please enter a description for this cost (optional, press /skip to leave blank):"
-    )
-    return COST_DESCRIPTION
+    user_id = query.from_user.id
+    logger.info(f"save_cost_frequency called by user {user_id}")
+
+    try:
+        query.answer()
+        
+        frequency = query.data.replace('new_frequency_', '')
+        logger.info(f"Frequency selected: {frequency}")
+        
+        context.user_data['cost_frequency'] = frequency
+        logger.info(f"Frequency {frequency} saved in user_data")
+        
+        # Ask for description
+        query.edit_message_text(
+            "🗒 Please enter a description for this cost (optional, press /skip to leave blank):"
+        )
+        logger.info("Description input request")
+        return COST_DESCRIPTION
+        
+    except Exception as e:
+        logger.error(f"Error in save_cost_frequency: {e}")
+        try:
+            query.edit_message_text(
+                "⚠️ An error occurred. Please try again later."
+            )
+        except:
+            pass
+        context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="Returning to cost menu...",
+            reply_markup=KeyboardBuilder.create_cost_control_keyboard(DBUtils.get_fixed_costs())
+        )
+        return ADMIN_COSTS
 
 def skip_cost_description(update, context):
     """Skip providing a cost description"""
@@ -486,6 +509,7 @@ def save_cost_description(update, context):
 def save_cost_to_database(update, context):
     """Save the complete cost to database"""
     user_id = update.effective_user.id
+    logger.info(f"save_cost_to_database called by user {user_id}")
     
     # Collect data from context
     cost_data = {
@@ -498,86 +522,157 @@ def save_cost_to_database(update, context):
     # Save to database
     result = DBUtils.add_fixed_cost(user_id, cost_data)
     
-    if result['success']:
-        message = (
-            f"✅ Fixed cost created successfully!\n\n"
-            f"📝 Name: {cost_data['name']}\n"
-            f"💰 Amount: {cost_data['amount']}€\n"
-            f"🔄 Frequency: {cost_data['frequency']}\n"
+    logger.info(f"Cost data to be saved: {cost_data}")
+
+    # Check that all necessary data is present
+    if not all(key in cost_data and cost_data[key] is not None for key in ['name', 'amount', 'frequency']):
+        logger.error(f"Dati costo incompleti: {cost_data}")
+
+        # Display which data are missing in the logs
+        for key in ['name', 'amount', 'frequency']:
+            if key not in cost_data or cost_data[key] is None:
+                logger.error(f"Dato mancante: {key}")
+
+        # Create an error message and return to the cost menu
+        error_message = "⚠️ Incomplete cost data. Please try again."
+
+        if isinstance(update, telegram.Update) and update.message:
+            update.message.reply_text(error_message)
+        else:
+            context.bot.send_message(chat_id=user_id, text=error_message)
+
+        # Back to cost menu
+        context.bot.send_message(
+            chat_id=user_id,
+            text="Returning to cost menu...",
+            reply_markup=KeyboardBuilder.create_cost_control_keyboard(DBUtils.get_fixed_costs())
         )
+        return ADMIN_COSTS
+    
+    try:
+        # Save to database
+        logger.info("Attempt to save cost in database...")
+        result = DBUtils.add_fixed_cost(user_id, cost_data)
+        logger.info(f"Result saved: {result}")
+    
+        if result['success']:
+            message = (
+                f"✅ Fixed cost created successfully!\n\n"
+                f"📝 Name: {cost_data['name']}\n"
+                f"💰 Amount: {cost_data['amount']}€\n"
+                f"🔄 Frequency: {cost_data['frequency']}\n"
+            )
         
-        if cost_data['description']:
-            message += f"🗒 Description: {cost_data['description']}\n"
+            if cost_data['description']:
+                message += f"🗒 Description: {cost_data['description']}\n"
+
+            logger.info("Cost saved successfully")
         
-        # Create back button
-        keyboard = [[InlineKeyboardButton("🔙 Back to cost menu", callback_data='admin_costs')]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+            # Create back button
+            keyboard = [[InlineKeyboardButton("🔙 Back to cost menu", callback_data='admin_costs')]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+        
+            if isinstance(update, telegram.Update) and update.message:
+                update.message.reply_text(message, reply_markup=reply_markup)
+            else:
+                context.bot.send_message(
+                    chat_id=user_id,
+                    text=message,
+                    reply_markup=reply_markup
+                )
+        else:
+            error_message = f"❌ Failed to create cost: {result.get('error', 'Unknown error')}"
+            
+            # Create back button
+            keyboard = [[InlineKeyboardButton("🔙 Back to cost menu", callback_data='admin_costs')]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            if isinstance(update, telegram.Update) and update.message:
+                update.message.reply_text(error_message, reply_markup=reply_markup)
+            else:
+                context.bot.send_message(
+                    chat_id=user_id,
+                    text=error_message,
+                    reply_markup=reply_markup
+                )
+
+    except Exception as e:
+        logger.error(f"Unexpected error in save_cost_to_database: {e}")
+        error_message = "⚠️ An unexpected error occurred. Please try again later."
         
         if isinstance(update, telegram.Update) and update.message:
-            update.message.reply_text(message, reply_markup=reply_markup)
+            update.message.reply_text(error_message)
         else:
-            context.bot.send_message(
-                chat_id=user_id,
-                text=message,
-                reply_markup=reply_markup
-            )
-    else:
-        error_message = f"❌ Failed to create cost: {result.get('error', 'Unknown error')}"
-        
-        # Create back button
-        keyboard = [[InlineKeyboardButton("🔙 Back to cost menu", callback_data='admin_costs')]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        if isinstance(update, telegram.Update) and update.message:
-            update.message.reply_text(error_message, reply_markup=reply_markup)
-        else:
-            context.bot.send_message(
-                chat_id=user_id,
-                text=error_message,
-                reply_markup=reply_markup
-            )
+            context.bot.send_message(chat_id=user_id, text=error_message)
     
     return ADMIN_COSTS
 
 def handle_cost_selection(update, context):
     """Handle selection of existing cost"""
     query = update.callback_query
-    query.answer()
+    user_id = query.from_user.id
+    logger.info(f"handle_cost_selection called by user {user_id}")
+
+    try:
+        query.answer()
     
-    # Extract cost ID from callback
-    cost_id = int(query.data.replace('edit_cost_', ''))
-    context.user_data['editing_cost_id'] = cost_id
+        # Extract cost ID from callback
+        cost_id = int(query.data.replace('edit_cost_', ''))
+        logger.info(f"Cost ID selected: {cost_id}")
+        
+        context.user_data['editing_cost_id'] = cost_id
+        logger.info(f"Cost ID {cost_id} saved in user_data")
     
-    # Get cost details
-    costs = DBUtils.get_fixed_costs()
-    selected_cost = next((c for c in costs if c['id'] == cost_id), None)
+        # Get cost details
+        costs = DBUtils.get_fixed_costs()
+        selected_cost = next((c for c in costs if c['id'] == cost_id), None)
     
-    if not selected_cost:
-        query.edit_message_text(
-            "⚠️ Cost not found. It may have been deleted."
+        if not selected_cost:
+            logger.warning(f"Cost ID {cost_id} not found in the database")
+            query.edit_message_text(
+                "⚠️ Cost not found. It may have been deleted."
+            )
+            return show_cost_control_menu(update, context)
+
+        logger.info(f"Cost details found: {selected_cost}")
+    
+        # Create message
+        message = (
+            f"💰 *Fixed Cost Details*\n\n"
+            f"📝 Name: {selected_cost['name']}\n"
+            f"💰 Amount: {selected_cost['amount']}€\n"
+            f"🔄 Frequency: {selected_cost['frequency']}\n"
         )
-        return show_cost_control_menu(update, context)
     
-    # Create message
-    message = (
-        f"💰 *Fixed Cost Details*\n\n"
-        f"📝 Name: {selected_cost['name']}\n"
-        f"💰 Amount: {selected_cost['amount']}€\n"
-        f"🔄 Frequency: {selected_cost['frequency']}\n"
-    )
+        if selected_cost.get('description'):
+            message += f"🗒 Description: {selected_cost['description']}\n"
     
-    if selected_cost.get('description'):
-        message += f"🗒 Description: {selected_cost['description']}\n"
+        # Create keyboard for actions
+        reply_markup = KeyboardBuilder.create_cost_actions_keyboard(cost_id)
     
-    # Create keyboard for actions
-    reply_markup = KeyboardBuilder.create_cost_actions_keyboard(cost_id)
-    
-    query.edit_message_text(
-        message,
-        parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
-    return ADMIN_COSTS
+        query.edit_message_text(
+            message,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        logger.info("Cost details successfully displayed")
+        return ADMIN_COSTS
+        
+    except Exception as e:
+        logger.error(f"Error in handle_cost_selection: {e}")
+        try:
+            query.edit_message_text(
+                "⚠️ An error occurred while viewing cost details. Please try again."
+            )
+        except:
+            pass
+        
+        context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="Returning to cost menu...",
+            reply_markup=KeyboardBuilder.create_cost_control_keyboard(DBUtils.get_fixed_costs())
+        )
+        return ADMIN_COSTS
 
 def handle_cost_action(update, context):
     """Handle actions for a specific cost"""
