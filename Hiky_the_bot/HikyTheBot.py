@@ -62,7 +62,8 @@ logger.info(f"Using python-telegram-bot version: {telegram.__version__}")
  ADMIN_MAINTENANCE, MAINTENANCE_DATE, MAINTENANCE_START_TIME, MAINTENANCE_END_TIME, MAINTENANCE_REASON,
  ADMIN_QUERY_DB, ADMIN_QUERY_EXECUTE, ADMIN_QUERY_SAVE, ADMIN_QUERY_DELETE, ADMIN_QUERY_NAME, 
  ADMIN_COSTS, COST_NAME, COST_AMOUNT, COST_FREQUENCY, COST_DESCRIPTION, ADMIN_HIKE_VARIABLE_COSTS,
- ADMIN_EDIT_COST_SETTINGS, ADMIN_FIXED_COST_COVERAGE, ADMIN_MAX_COST_PER_PARTICIPANT) = range(56)
+ ADMIN_EDIT_COST_SETTINGS, ADMIN_FIXED_COST_COVERAGE, ADMIN_MAX_COST_PER_PARTICIPANT,
+ ADMIN_DYNAMIC_FEES, ADMIN_UPDATE_ATTENDANCE, ADMIN_LOCK_FEES) = range(59)
 
 # Define timezone for Rome (for consistent timestamps)
 rome_tz = pytz.timezone('Europe/Rome')
@@ -1163,6 +1164,904 @@ def save_max_cost_per_participant(update, context):
 #        )
 #        return ADMIN_MAX_COST_PER_PARTICIPANT
 # End handlers for editing cost settings
+
+# Start handler dynamic fee
+def handle_dynamic_fees(update, context):
+    """Display dynamic fee management interface"""
+    query = update.callback_query
+    query.answer()
+    
+    hike_id = int(query.data.replace('admin_dynamic_fees_', ''))
+    context.user_data['selected_admin_hike'] = hike_id
+    
+    # Calculate current dynamic fees
+    result = DBUtils.calculate_dynamic_fees(hike_id, query.from_user.id)
+    
+    if not result['success']:
+        query.edit_message_text(
+            f"❌ Error: {result.get('error', 'Unknown error')}"
+        )
+        return ADMIN_MENU
+    
+    # Check if fees are locked
+    is_locked = result.get('is_locked', False)
+    
+    if is_locked:
+        participant_fee = result.get('participant_fee', 0)
+        guide_fee = result.get('guide_fee', 0)
+        
+        message = (
+            "💵 *Dynamic Fee Management*\n\n"
+            "The fees for this hike are currently locked at:\n\n"
+            f"Participant Fee: {participant_fee:.2f}€\n"
+            f"Guide Fee: {guide_fee:.2f}€\n\n"
+            "You can unlock the fees to recalculate them."
+        )
+    else:
+        participant_fee = result.get('participant_fee', 0)
+        guide_fee = result.get('guide_fee', 0)
+        actual_attendance = result.get('actual_attendance', 0)
+        registered_guides = result.get('registered_guides', 0)
+        
+        message = (
+            "💵 *Dynamic Fee Management*\n\n"
+            f"Current attendance: {actual_attendance} participants, {registered_guides} guides\n\n"
+            f"Calculated fees based on current attendance:\n"
+            f"Participant Fee: {participant_fee:.2f}€\n"
+            f"Guide Fee: {guide_fee:.2f}€\n\n"
+            "These fees are not locked and will change if attendance changes."
+        )
+    
+    reply_markup = KeyboardBuilder.create_dynamic_fees_keyboard(hike_id, is_locked)
+    
+    query.edit_message_text(
+        message,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_DYNAMIC_FEES
+
+def handle_update_attendance(update, context):
+    """Handle updating attendance count"""
+    query = update.callback_query
+    query.answer()
+    
+    hike_id = int(query.data.replace('update_attendance_', ''))
+    context.user_data['updating_hike_id'] = hike_id
+    
+    # Get current attendance
+    result = DBUtils.calculate_dynamic_fees(hike_id, query.from_user.id)
+    
+    if not result['success']:
+        query.edit_message_text(
+            f"❌ Error: {result.get('error', 'Unknown error')}"
+        )
+        return ADMIN_MENU
+    
+    actual_attendance = result.get('actual_attendance', 0)
+    
+    # Create keyboard for canceling
+    keyboard = [[InlineKeyboardButton("🔙 Cancel", callback_data=f'admin_dynamic_fees_{hike_id}')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    query.edit_message_text(
+        f"🔢 *Update Attendance*\n\n"
+        f"Current attendance: {actual_attendance} participants\n\n"
+        f"Please enter the actual number of participants who attended the hike:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_UPDATE_ATTENDANCE
+
+def save_attendance_count(update, context):
+    """Save the attendance count"""
+    try:
+        attendance_count = int(update.message.text.strip())
+        
+        if attendance_count < 0:
+            update.message.reply_text(
+                "⚠️ Attendance count cannot be negative. Please enter a valid number:"
+            )
+            return ADMIN_UPDATE_ATTENDANCE
+        
+        # Get hike ID from context
+        hike_id = context.user_data.get('updating_hike_id')
+        if not hike_id:
+            update.message.reply_text(
+                "❌ Error: Hike ID not found. Please try again."
+            )
+            return ADMIN_MENU
+        
+        # Update attendance in database
+        result = DBUtils.update_actual_attendance(hike_id, update.effective_user.id, attendance_count)
+        
+        if result['success']:
+            # Calculate new fees based on updated attendance
+            fee_result = DBUtils.calculate_dynamic_fees(hike_id, update.effective_user.id)
+            
+            if fee_result['success']:
+                participant_fee = fee_result.get('participant_fee', 0)
+                guide_fee = fee_result.get('guide_fee', 0)
+                
+                update.message.reply_text(
+                    f"✅ Attendance updated to {attendance_count} participants.\n\n"
+                    f"New calculated fees:\n"
+                    f"Participant Fee: {participant_fee:.2f}€\n"
+                    f"Guide Fee: {guide_fee:.2f}€"
+                )
+            else:
+                update.message.reply_text(
+                    f"✅ Attendance updated to {attendance_count} participants.\n\n"
+                    f"Error calculating new fees: {fee_result.get('error', 'Unknown error')}"
+                )
+                
+        else:
+            update.message.reply_text(
+                f"❌ Error updating attendance: {result.get('error', 'Unknown error')}"
+            )
+        
+        # Return to dynamic fees menu
+        keyboard = [[InlineKeyboardButton("🔙 Back to fee management", callback_data=f'admin_dynamic_fees_{hike_id}')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        update.message.reply_text(
+            "What would you like to do next?",
+            reply_markup=reply_markup
+        )
+        return ADMIN_DYNAMIC_FEES
+        
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Please enter a valid number:"
+        )
+        return ADMIN_UPDATE_ATTENDANCE
+
+def handle_recalculate_fees(update, context):
+    """Handle recalculating fees based on current attendance"""
+    query = update.callback_query
+    query.answer()
+    
+    hike_id = int(query.data.replace('recalculate_fees_', ''))
+    
+    # Recalculate fees
+    result = DBUtils.calculate_dynamic_fees(hike_id, query.from_user.id)
+    
+    if not result['success']:
+        query.edit_message_text(
+            f"❌ Error: {result.get('error', 'Unknown error')}"
+        )
+        return ADMIN_MENU
+    
+    participant_fee = result.get('participant_fee', 0)
+    guide_fee = result.get('guide_fee', 0)
+    actual_attendance = result.get('actual_attendance', 0)
+    registered_guides = result.get('registered_guides', 0)
+    
+    message = (
+        "💵 *Dynamic Fee Management*\n\n"
+        f"Recalculated fees based on current attendance:\n"
+        f"Participants: {actual_attendance}\n"
+        f"Guides: {registered_guides}\n\n"
+        f"Participant Fee: {participant_fee:.2f}€\n"
+        f"Guide Fee: {guide_fee:.2f}€\n\n"
+        "You can lock these fees to prevent further changes."
+    )
+    
+    reply_markup = KeyboardBuilder.create_dynamic_fees_keyboard(hike_id, False)
+    
+    query.edit_message_text(
+        message,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_DYNAMIC_FEES
+
+def handle_lock_fees(update, context):
+    """Handle locking fees at current values"""
+    query = update.callback_query
+    query.answer()
+    
+    hike_id = int(query.data.replace('lock_fees_', ''))
+    
+    # Calculate current fees
+    result = DBUtils.calculate_dynamic_fees(hike_id, query.from_user.id)
+    
+    if not result['success']:
+        query.edit_message_text(
+            f"❌ Error: {result.get('error', 'Unknown error')}"
+        )
+        return ADMIN_MENU
+    
+    participant_fee = result.get('participant_fee', 0)
+    guide_fee = result.get('guide_fee', 0)
+    
+    # Store in context for confirmation
+    context.user_data['lock_hike_id'] = hike_id
+    context.user_data['lock_participant_fee'] = participant_fee
+    context.user_data['lock_guide_fee'] = guide_fee
+    
+    # Create confirmation keyboard
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Yes, lock fees", callback_data='confirm_lock_fees'),
+            InlineKeyboardButton("❌ No, cancel", callback_data=f'admin_dynamic_fees_{hike_id}')
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    query.edit_message_text(
+        f"🔒 *Lock Fees*\n\n"
+        f"Are you sure you want to lock the fees at these values?\n\n"
+        f"Participant Fee: {participant_fee:.2f}€\n"
+        f"Guide Fee: {guide_fee:.2f}€\n\n"
+        f"Once locked, fees will not change with attendance unless you unlock them.",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_LOCK_FEES
+
+def send_fee_lock_notifications(context, hike_id):
+    """Send notifications to all participants when fees are locked"""
+    # Get hike details
+    conn = DBUtils.get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+    SELECT 
+        h.hike_name, 
+        h.hike_date, 
+        h.final_participant_fee,
+        h.final_guide_fee
+    FROM hikes h
+    WHERE h.id = ? AND h.fee_locked = 1
+    """, (hike_id,))
+    
+    hike = cursor.fetchone()
+    
+    if not hike:
+        logger.error(f"Cannot send fee lock notifications: Hike {hike_id} not found or fees not locked")
+        conn.close()
+        return
+    
+    # Format date for display
+    hike_date = datetime.strptime(hike['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+    
+    # Get all participants
+    cursor.execute("""
+    SELECT 
+        r.telegram_id,
+        u.is_guide
+    FROM registrations r
+    JOIN users u ON r.telegram_id = u.telegram_id
+    WHERE r.hike_id = ?
+    """, (hike_id,))
+    
+    participants = cursor.fetchall()
+    conn.close()
+    
+    # Send notification to each participant
+    for participant in participants:
+        telegram_id = participant['telegram_id']
+        is_guide = participant['is_guide']
+        
+        # Determine fee based on role
+        fee = hike['final_guide_fee'] if is_guide else hike['final_participant_fee']
+        role = "guide" if is_guide else "participant"
+        
+        # Create message
+        message = (
+            f"💰 *Final Fee Notification*\n\n"
+            f"The fee for the following hike has been finalized:\n\n"
+            f"🏔️ *{hike['hike_name']}*\n"
+            f"📅 Date: {hike_date}\n\n"
+            f"Your final fee as a {role}: *{fee:.2f}€*\n\n"
+            f"Thank you for participating in our hikes! 🌄"
+        )
+        
+        keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        try:
+            context.bot.send_message(
+                chat_id=telegram_id,
+                text=message,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify user {telegram_id} about fee lock: {e}")
+
+def confirm_lock_fees(update, context):
+    """Confirm locking fees at current values"""
+    query = update.callback_query
+    query.answer()
+    
+    hike_id = context.user_data.get('lock_hike_id')
+    participant_fee = context.user_data.get('lock_participant_fee', 0)
+    guide_fee = context.user_data.get('lock_guide_fee', 0)
+    
+    if not hike_id:
+        query.edit_message_text(
+            "❌ Error: Hike ID not found. Please try again."
+        )
+        return ADMIN_MENU
+    
+    # Lock fees in database
+    result = DBUtils.lock_fees(hike_id, query.from_user.id, participant_fee, guide_fee)
+    
+    if result['success']:
+        message = (
+            "✅ Fees locked successfully!\n\n"
+            f"Participant Fee: {participant_fee:.2f}€\n"
+            f"Guide Fee: {guide_fee:.2f}€\n\n"
+            "These fees will not change with attendance unless you unlock them.\n\n"
+            "Notifications will be sent to all participants."
+        )
+        # Send notifications to participants
+        send_fee_lock_notifications(context, hike_id)
+    else:
+        message = (
+            f"❌ Error locking fees: {result.get('error', 'Unknown error')}"
+        )
+    
+    reply_markup = KeyboardBuilder.create_dynamic_fees_keyboard(hike_id, True)
+    
+    query.edit_message_text(
+        message,
+        reply_markup=reply_markup
+    )
+    return ADMIN_DYNAMIC_FEES
+
+def handle_unlock_fees(update, context):
+    """Handle unlocking fees"""
+    query = update.callback_query
+    query.answer()
+    
+    hike_id = int(query.data.replace('unlock_fees_', ''))
+    
+    # Create confirmation keyboard
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Yes, unlock fees", callback_data=f'confirm_unlock_fees_{hike_id}'),
+            InlineKeyboardButton("❌ No, keep locked", callback_data=f'admin_dynamic_fees_{hike_id}')
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    query.edit_message_text(
+        "🔓 *Unlock Fees*\n\n"
+        "Are you sure you want to unlock the fees?\n\n"
+        "This will allow fees to be recalculated based on attendance.",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return ADMIN_LOCK_FEES
+
+def confirm_unlock_fees(update, context):
+    """Confirm unlocking fees"""
+    query = update.callback_query
+    query.answer()
+    
+    hike_id = int(query.data.replace('confirm_unlock_fees_', ''))
+    
+    # Unlock fees in database
+    result = DBUtils.unlock_fees(hike_id, query.from_user.id)
+    
+    if result['success']:
+        # Recalculate fees based on current attendance
+        fee_result = DBUtils.calculate_dynamic_fees(hike_id, query.from_user.id)
+        
+        if fee_result['success']:
+            participant_fee = fee_result.get('participant_fee', 0)
+            guide_fee = fee_result.get('guide_fee', 0)
+            actual_attendance = fee_result.get('actual_attendance', 0)
+            
+            message = (
+                "✅ Fees unlocked successfully!\n\n"
+                f"Current calculated fees based on {actual_attendance} participants:\n"
+                f"Participant Fee: {participant_fee:.2f}€\n"
+                f"Guide Fee: {guide_fee:.2f}€\n\n"
+                "These fees will now adjust with attendance changes."
+            )
+        else:
+            message = (
+                "✅ Fees unlocked successfully!\n\n"
+                f"Error calculating new fees: {fee_result.get('error', 'Unknown error')}"
+            )
+    else:
+        message = (
+            f"❌ Error unlocking fees: {result.get('error', 'Unknown error')}"
+        )
+    
+    reply_markup = KeyboardBuilder.create_dynamic_fees_keyboard(hike_id, False)
+    
+    query.edit_message_text(
+        message,
+        reply_markup=reply_markup
+    )
+    return ADMIN_DYNAMIC_FEES
+
+# End handler dynamic fee
+
+# Start handle participant check-in after the hike
+def create_attendance_message(hike_id, participant_data, context):
+    """Create a message with attendance confirmation options"""
+    # Get hike data
+    result = DBUtils.calculate_dynamic_fees(hike_id, context.bot.id)  # Using bot ID as admin
+    
+    if not result['success']:
+        return "Error getting hike details", None
+    
+    # Check if fees are locked
+    is_locked = result.get('is_locked', False)
+    participant_fee = result.get('participant_fee', 0)
+    guide_fee = result.get('guide_fee', 0)
+    
+    # Format fees
+    if is_locked:
+        fee_message = f"The final cost for this hike is locked at {participant_fee:.2f}€ per participant."
+    else:
+        fee_message = f"The current estimated cost is {participant_fee:.2f}€ per participant (may change based on final attendance)."
+    
+    # Create keyboard for attendance confirmation
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ I attended", callback_data=f'attended_yes_{hike_id}'),
+            InlineKeyboardButton("❌ I couldn't attend", callback_data=f'attended_no_{hike_id}')
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Create message
+    message = (
+        f"🗓 *Hike Attendance Confirmation*\n\n"
+        f"Hike: {participant_data.get('hike_name', 'Unknown')}\n"
+        f"Date: {participant_data.get('hike_date', 'Unknown')}\n\n"
+        f"{fee_message}\n\n"
+        f"Please confirm if you attended this hike:"
+    )
+    
+    return message, reply_markup
+
+def handle_attendance_confirmation(update, context):
+    """Handle participant's attendance confirmation"""
+    query = update.callback_query
+    query.answer()
+    
+    parts = query.data.split('_')
+    attended = parts[1] == 'yes'
+    hike_id = int(parts[2])
+    
+    # Record attendance
+    result = DBUtils.record_attendance(hike_id, query.from_user.id, attended)
+    
+    if result['success']:
+        if attended:
+            message = (
+                "✅ Thank you for confirming your attendance!\n\n"
+                "Your attendance has been recorded. The final cost will be calculated based on the total number of participants."
+            )
+        else:
+            message = (
+                "❌ You've confirmed that you couldn't attend.\n\n"
+                "We're sorry you missed the hike. Your response has been recorded."
+            )
+    else:
+        message = (
+            f"⚠️ Error recording your response: {result.get('error', 'Unknown error')}\n\n"
+            "Please try again later or contact an administrator."
+        )
+    
+    # Return to main menu
+    keyboard = [[InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    query.edit_message_text(
+        message,
+        reply_markup=reply_markup
+    )
+    return CHOOSING
+
+# Function to send attendance confirmation messages to all participants after a hike
+def send_attendance_confirmations(context):
+    """Send attendance confirmation messages to participants after hikes"""
+    # This can be called from a job queue scheduler
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    
+    # Get hikes that happened yesterday
+    conn = DBUtils.get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+    SELECT 
+        h.id, 
+        h.hike_name, 
+        h.hike_date,
+        h.is_active,
+        h.fee_locked,
+        h.final_participant_fee
+    FROM hikes h
+    WHERE 
+        h.hike_date = ? AND
+        h.is_active = 1
+    """, (yesterday,))
+    
+    yesterday_hikes = [dict(row) for row in cursor.fetchall()]
+    
+    # For each hike, get participants and send confirmation message
+    for hike in yesterday_hikes:
+        # Get participants
+        cursor.execute("""
+        SELECT 
+            r.telegram_id,
+            u.is_guide
+        FROM registrations r
+        JOIN users u ON r.telegram_id = u.telegram_id
+        WHERE r.hike_id = ?
+        """, (hike['id'],))
+        
+        participants = cursor.fetchall()
+        
+        for participant in participants:
+            telegram_id = participant['telegram_id']
+            is_guide = participant['is_guide']
+            
+            # Skip attendance confirmation for guides if needed
+            if is_guide:
+                # Automatically mark guides as attended
+                DBUtils.record_attendance(hike['id'], telegram_id, True)
+                continue
+            
+            # Create and send attendance confirmation message
+            message, reply_markup = create_attendance_message(hike['id'], hike, context)
+            
+            try:
+                context.bot.send_message(
+                    chat_id=telegram_id,
+                    text=message,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+            except Exception as e:
+                logger.error(f"Failed to send attendance confirmation to {telegram_id}: {e}")
+    
+    conn.close()
+
+# Add this function to handle post-hike actions including fee calculations
+def handle_post_hike_actions(context):
+    """Handle various post-hike actions like fee calculations"""
+    # This can be called from a job queue scheduler
+    today = date.today()
+    three_days_ago = today - timedelta(days=3)
+    
+    # Get hikes that happened 3 days ago and aren't locked yet
+    conn = DBUtils.get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+    SELECT 
+        h.id,
+        h.hike_name, 
+        h.hike_date
+    FROM hikes h
+    WHERE 
+        h.hike_date = ? AND
+        h.is_active = 1 AND
+        h.fee_locked = 0
+    """, (three_days_ago,))
+    
+    unlocked_past_hikes = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    # For each hike, calculate final fees based on attendance
+    for hike in unlocked_past_hikes:
+        hike_id = hike['id']
+        
+        # Get attendance count
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+        SELECT COUNT(*) as count
+        FROM attendance
+        WHERE hike_id = ? AND attended = 1
+        """, (hike_id,))
+        
+        attendance = cursor.fetchone()
+        conn.close()
+        
+        attendance_count = attendance['count'] if attendance else 0
+        
+        # Update actual attendance
+        DBUtils.update_actual_attendance(hike_id, context.bot.id, attendance_count)
+        
+        # Calculate and lock fees
+        fee_result = DBUtils.calculate_dynamic_fees(hike_id, context.bot.id)
+        
+        if fee_result['success']:
+            participant_fee = fee_result.get('participant_fee', 0)
+            guide_fee = fee_result.get('guide_fee', 0)
+            
+            # Lock fees
+            DBUtils.lock_fees(hike_id, context.bot.id, participant_fee, guide_fee)
+
+            if lock_result['success']:
+                # Send notifications to participants
+                send_fee_lock_notifications(context, hike_id)
+
+                # Notify admins
+                admin_message = (
+                    f"🔒 *Automatic Fee Lock*\n\n"
+                    f"Hike: {hike['hike_name']}\n"
+                    f"Date: {hike['hike_date']}\n\n"
+                    f"The fees have been automatically locked based on attendance:\n"
+                    f"Participants: {attendance_count}\n"
+                    f"Participant Fee: {participant_fee:.2f}€\n"
+                    f"Guide Fee: {guide_fee:.2f}€\n\n"
+                    f"Notifications have been sent to all participants."
+                )
+
+                # Send notification to all admins
+                admins = DBUtils.get_all_admins()
+                for admin in admins:
+                    try:
+                        context.bot.send_message(
+                            chat_id=admin['telegram_id'],
+                            text=admin_message,
+                            parse_mode='Markdown'
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to notify admin {admin['telegram_id']}: {e}")
+
+# Add a function to generate payment reports for admins
+def generate_payment_report(hike_id, admin_id):
+    """
+    Generate a payment report for a hike
+    
+    Args:
+        hike_id: ID of the hike
+        admin_id: ID of the admin requesting the report
+        
+    Returns:
+        dict: Success flag and report data
+    """
+    # Check if admin
+    if not DBUtils.check_is_admin(admin_id):
+        return {"success": False, "error": "Admin privileges required"}
+    
+    conn = DBUtils.get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Get hike details
+        cursor.execute("""
+        SELECT 
+            h.hike_name, 
+            h.hike_date, 
+            h.fee_locked,
+            h.final_participant_fee,
+            h.final_guide_fee,
+            h.variable_costs,
+            h.fixed_cost_coverage
+        FROM hikes h
+        WHERE h.id = ?
+        """, (hike_id,))
+        
+        hike = cursor.fetchone()
+        if not hike:
+            conn.close()
+            return {"success": False, "error": "Hike not found"}
+        
+        # Convert to dict
+        hike_data = dict(hike)
+        
+        # Format date for display
+        if isinstance(hike_data['hike_date'], str):
+            hike_date = datetime.strptime(hike_data['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+        else:
+            hike_date = hike_data['hike_date'].strftime('%d/%m/%Y')
+        
+        # Check if fees are locked
+        if not hike_data.get('fee_locked'):
+            conn.close()
+            return {"success": False, "error": "Fees are not locked yet"}
+        
+        # Get participants and attendance data
+        cursor.execute("""
+        SELECT 
+            r.telegram_id,
+            r.name_surname,
+            u.is_guide,
+            (SELECT attended FROM attendance a WHERE a.registration_id = r.id) as attended
+        FROM registrations r
+        JOIN users u ON r.telegram_id = u.telegram_id
+        WHERE r.hike_id = ?
+        """, (hike_id,))
+        
+        participants = cursor.fetchall()
+        conn.close()
+        
+        # Calculate totals
+        participant_fee = hike_data.get('final_participant_fee', 0)
+        guide_fee = hike_data.get('final_guide_fee', 0)
+        
+        total_participants = sum(1 for p in participants if not p['is_guide'] and p['attended'])
+        total_guides = sum(1 for p in participants if p['is_guide'] and p['attended'])
+        
+        total_collected = participant_fee * total_participants
+        total_guide_costs = guide_fee * total_guides
+        
+        # Calculate profit
+        variable_costs = hike_data.get('variable_costs', 0)
+        fixed_cost_portion = hike_data.get('fixed_cost_coverage', 0.5) * DBUtils.get_monthly_fixed_costs()
+        
+        profit = total_collected - variable_costs - fixed_cost_portion
+        
+        # Format participants list
+        participants_list = []
+        for p in participants:
+            is_guide = p.get('is_guide', 0) == 1
+            attended = p.get('attended', 0) == 1
+            
+            if attended:
+                fee = guide_fee if is_guide else participant_fee
+                status = "✅ Attended"
+                role = "Guide" if is_guide else "Participant"
+            else:
+                fee = 0
+                status = "❌ Did not attend"
+                role = "Guide" if is_guide else "Participant"
+            
+            participants_list.append({
+                'name': p.get('name_surname', 'Unknown'),
+                'role': role,
+                'status': status,
+                'fee': fee
+            })
+        
+        # Create report data
+        report = {
+            'hike_name': hike_data.get('hike_name', 'Unknown'),
+            'hike_date': hike_date,
+            'total_participants': total_participants,
+            'total_guides': total_guides,
+            'participant_fee': participant_fee,
+            'guide_fee': guide_fee,
+            'total_collected': total_collected,
+            'variable_costs': variable_costs,
+            'fixed_cost_portion': fixed_cost_portion,
+            'profit': profit,
+            'participants': participants_list
+        }
+        
+        return {"success": True, "report": report}
+            
+    except sqlite3.Error as e:
+        conn.close()
+        return {"success": False, "error": str(e)}
+
+# Add a function to send payment report to admin
+def send_payment_report(update, context, hike_id):
+    """Send a payment report to the admin"""
+    query = update.callback_query
+    if query:
+        query.answer()
+    
+    # Generate report
+    result = generate_payment_report(hike_id, update.effective_user.id)
+    
+    if not result['success']:
+        message = f"❌ Error generating report: {result.get('error', 'Unknown error')}"
+        
+        if query:
+            query.edit_message_text(message)
+        else:
+            update.message.reply_text(message)
+        return ADMIN_MENU
+    
+    report = result['report']
+    
+    # Format report message
+    message = (
+        f"💰 *Payment Report*\n\n"
+        f"Hike: {report['hike_name']}\n"
+        f"Date: {report['hike_date']}\n\n"
+        f"👥 *Attendance*\n"
+        f"Participants: {report['total_participants']}\n"
+        f"Guides: {report['total_guides']}\n\n"
+        f"💵 *Fees*\n"
+        f"Participant Fee: {report['participant_fee']:.2f}€\n"
+        f"Guide Fee: {report['guide_fee']:.2f}€\n\n"
+        f"📊 *Financial Summary*\n"
+        f"Total Collected: {report['total_collected']:.2f}€\n"
+        f"Variable Costs: {report['variable_costs']:.2f}€\n"
+        f"Fixed Cost Portion: {report['fixed_cost_portion']:.2f}€\n"
+        f"Profit: {report['profit']:.2f}€\n\n"
+        f"👤 *Participants*\n"
+    )
+    
+    # Add participants list
+    for i, p in enumerate(report['participants'], 1):
+        message += f"{i}. {p['name']} ({p['role']}) - {p['status']} - {p['fee']:.2f}€\n"
+    
+    # Create back button
+    keyboard = [[InlineKeyboardButton("🔙 Back to hike details", callback_data=f'admin_hike_{hike_id}')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Send message
+    if query:
+        try:
+            query.edit_message_text(
+                message,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        except telegram.error.BadRequest as e:
+            # Handle message too long
+            if "Message is too long" in str(e):
+                # Shorten message
+                short_message = (
+                    f"💰 *Payment Report Summary*\n\n"
+                    f"Hike: {report['hike_name']}\n"
+                    f"Date: {report['hike_date']}\n\n"
+                    f"👥 *Attendance*\n"
+                    f"Participants: {report['total_participants']}\n"
+                    f"Guides: {report['total_guides']}\n\n"
+                    f"💵 *Fees*\n"
+                    f"Participant Fee: {report['participant_fee']:.2f}€\n"
+                    f"Guide Fee: {report['guide_fee']:.2f}€\n\n"
+                    f"📊 *Financial Summary*\n"
+                    f"Total Collected: {report['total_collected']:.2f}€\n"
+                    f"Variable Costs: {report['variable_costs']:.2f}€\n"
+                    f"Fixed Cost Portion: {report['fixed_cost_portion']:.2f}€\n"
+                    f"Profit: {report['profit']:.2f}€\n\n"
+                    "_The participant list is too long to display here._"
+                )
+                
+                query.edit_message_text(
+                    short_message,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+    else:
+        try:
+            update.message.reply_text(
+                message,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        except telegram.error.BadRequest as e:
+            # Handle message too long
+            if "Message is too long" in str(e):
+                # Shorten message
+                short_message = (
+                    f"💰 *Payment Report Summary*\n\n"
+                    f"Hike: {report['hike_name']}\n"
+                    f"Date: {report['hike_date']}\n\n"
+                    f"👥 *Attendance*\n"
+                    f"Participants: {report['total_participants']}\n"
+                    f"Guides: {report['total_guides']}\n\n"
+                    f"💵 *Fees*\n"
+                    f"Participant Fee: {report['participant_fee']:.2f}€\n"
+                    f"Guide Fee: {report['guide_fee']:.2f}€\n\n"
+                    f"📊 *Financial Summary*\n"
+                    f"Total Collected: {report['total_collected']:.2f}€\n"
+                    f"Variable Costs: {report['variable_costs']:.2f}€\n"
+                    f"Fixed Cost Portion: {report['fixed_cost_portion']:.2f}€\n"
+                    f"Profit: {report['profit']:.2f}€\n\n"
+                    "_The participant list is too long to display here._"
+                )
+                
+                update.message.reply_text(
+                    short_message,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+    
+    return ADMIN_MENU
+
+# End handle participant check-in after the hike
 
 # Start def to manage personal profile
 def show_profile_menu(update, context):
@@ -3312,6 +4211,9 @@ def handle_admin_choice(update, context):
     elif query.data == 'admin_costs':
         return show_cost_control_menu(update, context)
 
+    elif query.data.startswith('admin_dynamic_fees_'):
+        return handle_dynamic_fees(update, context)
+
     elif query.data == 'back_to_admin':
         reply_markup = KeyboardBuilder.create_admin_keyboard()
         
@@ -3384,34 +4286,75 @@ def handle_admin_choice(update, context):
         # Get monthly fixed costs
         monthly_fixed_costs = DBUtils.get_monthly_fixed_costs()
 
-        # Calculate fee ranges
-        fee_data = DBUtils.calculate_fee_ranges(selected_hike, monthly_fixed_costs)
+        # Get fee information including dynamic fees
+        fee_data = DBUtils.calculate_dynamic_fees(hike_id, query.from_user.id)
 
-        # Format for display (round to 2 decimal places)
-        guide_fee_min = round(fee_data['guide_fee_min'], 2)
-        guide_fee_max = round(fee_data['guide_fee_max'], 2)
-        participant_fee_min = round(fee_data['participant_fee_min'], 2)
-        participant_fee_max = round(fee_data['participant_fee_max'], 2)
+        # Format for display
+        fixed_cost_pct = int(fixed_cost_coverage * 100)
         variable_costs = selected_hike.get('variable_costs', 0)
         
-        # Convert percentages to display format
-        fixed_cost_pct = int(fixed_cost_coverage * 100)
+        # Check if fees are locked
+        is_locked = fee_data.get('is_locked', False) if fee_data.get('success', False) else False
+        
+        # Different fee display based on lock status
+        if is_locked and fee_data.get('success', False):
+            # Display locked fees
+            participant_fee = fee_data.get('participant_fee', 0)
+            guide_fee = fee_data.get('guide_fee', 0)
+            
+            fee_message = (
+                f"🔒 *Locked Fees*\n"
+                f"Participant Fee: {participant_fee:.2f}€\n"
+                f"Guide Fee: {guide_fee:.2f}€"
+            )
+        else:
+            # Calculate fee ranges
+            range_data = DBUtils.calculate_fee_ranges(selected_hike, monthly_fixed_costs)
+            
+            # Format for display (round to 2 decimal places)
+            guide_fee_min = round(range_data['guide_fee_min'], 2)
+            guide_fee_max = round(range_data['guide_fee_max'], 2)
+            participant_fee_min = round(range_data['participant_fee_min'], 2)
+            participant_fee_max = round(range_data['participant_fee_max'], 2)
+            
+            # Get current dynamic fee calculation
+            if fee_data.get('success', False):
+                current_participant_fee = round(fee_data.get('participant_fee', 0), 2)
+                current_guide_fee = round(fee_data.get('guide_fee', 0), 2)
+                actual_attendance = fee_data.get('actual_attendance', 0)
+                
+                fee_message = (
+                    f"🧮 *Fee Calculations*\n"
+                    f"Fee Range (Participant): {participant_fee_min:.2f}€ - {participant_fee_max:.2f}€\n"
+                    f"Fee Range (Guide): {guide_fee_min:.2f}€ - {guide_fee_max:.2f}€\n\n"
+                    f"Current Dynamic Calculation (based on {actual_attendance} attendees):\n"
+                    f"Participant Fee: {current_participant_fee:.2f}€\n"
+                    f"Guide Fee: {current_guide_fee:.2f}€"
+                )
+            else:
+                fee_message = (
+                    f"🧮 *Fee Calculations*\n"
+                    f"Fee Range (Participant): {participant_fee_min:.2f}€ - {participant_fee_max:.2f}€\n"
+                    f"Fee Range (Guide): {guide_fee_min:.2f}€ - {guide_fee_max:.2f}€"
+                )
+        
+        # Check if hike date is in the past
+        is_past_hike = datetime.strptime(selected_hike['hike_date'], '%Y-%m-%d').date() < date.today()
+        past_hike_message = "\n⏱ *This hike is in the past*" if is_past_hike else ""
         
         query.edit_message_text(
             f"🏔️ *{selected_hike['hike_name']}*\n\n"
-            f"Date: {hike_date}\n"
+            f"📅 Date: {hike_date}{past_hike_message}\n"
             f"Status: {status_emoji} {status_text}\n"
             f"👥 Participants: {participants_count}/{max_participants}\n"
             f"👑 Guides: {registered_guides}/{guides_total}\n"
             f"📊 Difficulty: {selected_hike.get('difficulty', 'Not set')}\n\n"
-            f"💰 *Cost Details*\n"
+            f"💰 *Cost Settings*\n"
             f"Total Fixed Costs: {monthly_fixed_costs:.2f}€ per month\n"
             f"Total Variable Costs: {variable_costs:.2f}€\n"
             f"Fixed Cost Coverage: {fixed_cost_pct}%\n"
             f"Maximum Cost Per Participant: {max_cost_per_participant:.2f}€\n\n"
-            f"🧮 *Fee Calculations*\n"
-            f"Participant Fee: {participant_fee_min:.2f}€ - {participant_fee_max:.2f}€\n"
-            f"Guide Fee: {guide_fee_min:.2f}€ - {guide_fee_max:.2f}€\n\n"
+            f"{fee_message}\n\n"
             f"What would you like to do with this hike?",
             parse_mode='Markdown',
             reply_markup=reply_markup
@@ -4458,6 +5401,79 @@ def show_my_hikes(update, context):
     
     return show_hike_details(update, context)
 
+def show_hike_signup_details(update, context, hike_id):
+    """Show details of a hike during signup process with fee information"""
+    conn = DBUtils.get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+    SELECT 
+        h.id, 
+        h.hike_name, 
+        h.hike_date, 
+        h.max_participants,
+        h.guides,
+        h.variable_costs,
+        h.fixed_cost_coverage,
+        h.max_cost_per_participant,
+        h.fee_locked,
+        h.final_participant_fee,
+        h.difficulty,
+        h.description,
+        (SELECT COUNT(*) FROM registrations r WHERE r.hike_id = h.id) as current_participants
+    FROM hikes h
+    WHERE h.id = ?
+    """, (hike_id,))
+    
+    hike = cursor.fetchone()
+    conn.close()
+    
+    if not hike:
+        return "Hike not found", None
+    
+    # Format date for display
+    hike_date = datetime.strptime(hike['hike_date'], '%Y-%m-%d').strftime('%d/%m/%Y')
+    
+    # Get fee information
+    if hike['fee_locked']:
+        fee_message = f"🔒 Fixed Fee: {hike['final_participant_fee']:.2f}€"
+    else:
+        # Calculate current estimated fee
+        fee_data = DBUtils.calculate_dynamic_fees(hike_id, context.bot.id)
+        
+        if fee_data.get('success', False):
+            current_fee = fee_data.get('participant_fee', 0)
+            fee_message = f"💰 Estimated Fee: {current_fee:.2f}€ (may change based on attendance)"
+        else:
+            # Fall back to fee range
+            hike_data = dict(hike)
+            monthly_fixed_costs = DBUtils.get_monthly_fixed_costs()
+            fee_range = DBUtils.calculate_fee_ranges(hike_data, monthly_fixed_costs)
+            
+            fee_min = round(fee_range['participant_fee_min'], 2)
+            fee_max = round(fee_range['participant_fee_max'], 2)
+            
+            fee_message = f"💰 Estimated Fee Range: {fee_min:.2f}€ - {fee_max:.2f}€"
+    
+    # Create signup keyboard
+    keyboard = [
+        [InlineKeyboardButton("✅ Sign up for this hike", callback_data=f'signup_hike_{hike_id}')],
+        [InlineKeyboardButton("🔙 Back to hike list", callback_data='hike_list')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message = (
+        f"🏔️ *{hike['hike_name']}*\n\n"
+        f"📅 Date: {hike_date}\n"
+        f"👥 Participants: {hike['current_participants']}/{hike['max_participants']}\n"
+        f"📊 Difficulty: {hike['difficulty']}\n\n"
+        f"{fee_message}\n\n"
+        f"📝 *Description:*\n{hike['description']}\n\n"
+        f"Would you like to sign up for this hike?"
+    )
+    
+    return message, reply_markup
+
 def show_hike_details(update, context):
     """Show details of a specific hike the user is registered for"""
     hikes = context.user_data['my_hikes']
@@ -5437,7 +6453,8 @@ def main():
                 CallbackQueryHandler(handle_hike_navigation, pattern='^(prev_hike|next_hike)$'),
                 CallbackQueryHandler(handle_cancel_request, pattern='^cancel_hike_\\d+$'),
                 CallbackQueryHandler(handle_cancel_confirmation, pattern='^(confirm_cancel|abort_cancel)$'),
-                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$')
+                CallbackQueryHandler(handle_restart_confirmation, pattern='^(yes_restart|no_restart)$'),
+                CallbackQueryHandler(handle_attendance_confirmation, pattern='^attended_(yes|no)_')
             ],
             DONATION: [
                 CommandHandler('menu', menu),
@@ -5559,6 +6576,28 @@ def main():
                 CommandHandler('restart', restart),
                 CallbackQueryHandler(handle_admin_choice, pattern='^admin_hike_'),
                 MessageHandler(Filters.text & ~Filters.command, save_max_cost_per_participant)
+            ],
+            ADMIN_DYNAMIC_FEES: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_update_attendance, pattern='^update_attendance_'),
+                CallbackQueryHandler(handle_recalculate_fees, pattern='^recalculate_fees_'),
+                CallbackQueryHandler(handle_lock_fees, pattern='^lock_fees_'),
+                CallbackQueryHandler(handle_unlock_fees, pattern='^unlock_fees_'),
+                CallbackQueryHandler(handle_admin_choice, pattern='^admin_hike_')
+            ],
+            ADMIN_UPDATE_ATTENDANCE: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(handle_dynamic_fees, pattern='^admin_dynamic_fees_'),
+                MessageHandler(Filters.text & ~Filters.command, save_attendance_count)
+            ],
+            ADMIN_LOCK_FEES: [
+                CommandHandler('menu', menu),
+                CommandHandler('restart', restart),
+                CallbackQueryHandler(confirm_lock_fees, pattern='^confirm_lock_fees$'),
+                CallbackQueryHandler(confirm_unlock_fees, pattern='^confirm_unlock_fees_'),
+                CallbackQueryHandler(handle_dynamic_fees, pattern='^admin_dynamic_fees_')
             ],
             ADMIN_COSTS: [
                 CommandHandler('menu', menu),
@@ -5810,6 +6849,8 @@ def main():
     
     # Add job scheduler for reminders
     job_queue = updater.job_queue
+
+    # Send hike reminder at 09:00
     job_queue.run_daily(
         callback=check_and_send_reminders,
         time=datetime_time(hour=9, minute=0, tzinfo=rome_tz)  # Send reminders at 9:00 Rome time
@@ -5818,6 +6859,18 @@ def main():
     job_queue.run_daily(
         callback=check_and_send_maintenance_notifications,
         time=datetime_time(hour=9, minute=30, tzinfo=rome_tz)  # Send maintenance alert at 9:30 Rome time
+    )
+
+    # Send attendance confirmations at 10:00 daily
+    job_queue.run_daily(
+        callback=send_attendance_confirmations,
+        time=datetime_time(hour=10, minute=0, tzinfo=rome_tz)
+    )
+
+    # Handle post-hike actions including fee locks at 11:00 daily
+    job_queue.run_daily(
+        callback=handle_post_hike_actions,
+        time=datetime_time(hour=11, minute=0, tzinfo=rome_tz)
     )
     
     # Register handlers
