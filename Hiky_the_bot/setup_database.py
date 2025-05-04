@@ -58,7 +58,7 @@ def setup_database():
         difficulty TEXT,
         variable_costs REAL DEFAULT 0,
         fixed_cost_coverage REAL DEFAULT 0.5,
-        max_cost_per_participant REAL DEFAULT 0, # 0 means no maximum
+        max_cost_per_participant REAL DEFAULT 0,
         actual_attendance INTEGER DEFAULT 0,
         fee_locked BOOLEAN DEFAULT 0,
         final_participant_fee REAL DEFAULT 0,
