@@ -672,8 +672,8 @@ class DBUtils:
                 final_guide_fee = ?
             WHERE id = ?
             """, (
-                participant_fee,
-                guide_fee,
+                math.ceil(participant_fee),
+                math.ceil(guide_fee),
                 hike_id
             ))
             
