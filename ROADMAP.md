@@ -31,6 +31,7 @@ This document outlines the development plan for HiKingsRome Bot, tracking comple
   - [ ] Voice message processing
 
 - **Technical Improvements**
+  - [ ] Database e-mail and mobile phone data validation
   - [ ] Mobile app companion (Flutter/React Native)
   - [ ] Code refactoring: Improve modularity and maintainability
   - [ ] Enhanced error handling: Improve recovery from unexpected errors
@@ -57,6 +58,11 @@ This document outlines the development plan for HiKingsRome Bot, tracking comple
     - Automated notifications to all users before maintenance
     - Ability to edit or cancel scheduled maintenanc
   - [x] Admin user management with ability to promote regular users to admin status
+  - [x] Fee Management System
+    - Guide-specific fee display in the admin interface
+    - Real-time fee calculation based on current registration numbers
+    - Clear distinction between locked and estimated fees in the UI
+    - Fee information in participant management screens
  
 - **User Features**
   - [x] Keyboard-based navigation throughout the bot
@@ -65,7 +71,12 @@ This document outlines the development plan for HiKingsRome Bot, tracking comple
     - Difficulty indicators
     - Availability status
     - Fee per person
-  - [X] Hike cost notification: Add cost per person information
+  - [x] Fee Management System
+    - Fee display in Hike Calendar view with accurate pricing
+    - Fee information in MyHikes section for registered hikes
+    - Transparent fee information during hike selection/registration process
+    - Different fee display for guides vs regular participants
+    - Visual indication of fee status (fixed vs estimated)
   - [x] Privacy consent management system:
     - Basic required consents
     - Optional consents for car sharing, photos, and marketing
