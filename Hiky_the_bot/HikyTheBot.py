@@ -1045,8 +1045,9 @@ def handle_edit_cost_settings(update, context):
     # Log the full callback data for debugging
     logger.info(f"Edit costs callback data: {query.data}")
 
-    # Simply extract the last part after the final underscore
-    hike_id = int(query.data.replace('admin_edit_costs_', ''))
+    # Extract the last part by splitting on underscores and getting the last element
+    parts = query.data.split('_')
+    hike_id = int(parts[-1])
         
     context.user_data['editing_hike_id'] = hike_id
     
