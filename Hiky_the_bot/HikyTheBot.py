@@ -3724,12 +3724,13 @@ def handle_costs_verification(update, context):
     query.answer()
     
     if query.data == 'costs_verified':
-        # Continue with hike creation - ask for description
+        # Continue with hike creation - ask for variable costs
         query.edit_message_text(
-            "📝 Please enter a description for this hike. "
-            "Include any important details like meeting point, what to bring, etc."
+            "💰 *Variable Costs Entry*\n\n"
+            "Please enter the variable costs for this specific hike (tolls, gasoline, etc.).\n"
+            "Enter a number (e.g., 15.50):"
         )
-        return ADMIN_HIKE_DESCRIPTION
+        return ADMIN_HIKE_VARIABLE_COSTS
     
     elif query.data == 'update_costs':
         # Redirect to the costs management panel
@@ -3753,6 +3754,47 @@ def handle_costs_verification(update, context):
             reply_markup=KeyboardBuilder.create_cost_control_keyboard(DBUtils.get_fixed_costs())
         )
         return ADMIN_COSTS
+
+def admin_save_variable_costs(update, context):
+    """Save variable costs for this hike"""
+    try:
+        # Get the variable costs input
+        variable_costs_str = update.message.text.strip()
+        
+        # Clean and convert to float
+        cleaned_amount = variable_costs_str.replace(',', '.')
+        
+        # Check for multiple decimal points
+        if cleaned_amount.count('.') > 1:
+            update.message.reply_text(
+                "⚠️ Invalid number format. Please enter a valid amount (e.g., 15.50):"
+            )
+            return ADMIN_HIKE_VARIABLE_COSTS
+        
+        # Convert to float and validate
+        variable_costs = float(cleaned_amount)
+        
+        if variable_costs < 0:
+            update.message.reply_text(
+                "⚠️ Variable costs cannot be negative. Please enter a valid amount:"
+            )
+            return ADMIN_HIKE_VARIABLE_COSTS
+        
+        # Store the variable costs
+        context.user_data['variable_costs'] = variable_costs
+        
+        # Now continue with description
+        update.message.reply_text(
+            "📝 Please enter a description for this hike. "
+            "Include any important details like meeting point, what to bring, etc."
+        )
+        return ADMIN_HIKE_DESCRIPTION
+        
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Please enter a valid number for variable costs (e.g., 15.50):"
+        )
+        return ADMIN_HIKE_VARIABLE_COSTS
 
 def admin_save_description(update, context):
     """Save hike description from admin input"""
