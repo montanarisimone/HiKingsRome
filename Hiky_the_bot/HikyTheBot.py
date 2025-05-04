@@ -1039,7 +1039,7 @@ def handle_edit_cost_settings(update, context):
     query = update.callback_query
     query.answer()
     
-    hike_id = int(query.data.replace('admin_edit_costs_', ''))
+    hike_id = int(query.data.split('_')[-1])
     context.user_data['editing_hike_id'] = hike_id
     
     # Get hike details
