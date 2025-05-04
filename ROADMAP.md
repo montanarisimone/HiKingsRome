@@ -60,21 +60,53 @@ This document outlines the development plan for HiKingsRome Bot, tracking comple
   - [x] Admin user management with ability to promote regular users to admin status
  
 - **User Features**
-  - [x] Inline keyboards for navigation
-  - [x] Calendar view for upcoming hikes
-  - [x] Privacy consent management
-  - [x] Age verification: System ensures only adults (18+) can register
-  - [x] Hike registration system
-  - [x] Users can cancel their registrations
-  - [x] Automated reminders with weather information sent 5 and 2 days before hikes
-  - [x] Personal profile management: Users can view and edit their personal information
+  - [x] Keyboard-based navigation throughout the bot
+  - [x] Calendar view of all upcoming hikes with:
+    - Month-based organization
+    - Difficulty indicators
+    - Availability status
+  - [x] Privacy consent management system:
+    - Basic required consents
+    - Optional consents for car sharing, photos, and marketing
+    - Consent version tracking
+  - [x] Age verification with calendar-based selector to ensure 18+ requirement
+  - [x] Complete multi-step hike registration system with:
+    - Pre-filled form using profile data
+    - Medical conditions reporting
+    - Multiple hike selection in one form
+    - Equipment confirmation
+    - Car sharing preferences
+    - Location selection with Rome municipality/neighborhood hierarchy
+    - Custom reminder preferences
+    - Additional notes field
+  - [x] Registration management:
+    - View all registered hikes with details
+    - Cancel registrations with confirmation
+    - Automatic duplicate registration prevention
+    - Spot availability checking in real-time
+  - [x] Smart automated reminder system:
+    - Weather forecasts using OpenWeatherMap API
+    - Configurable reminder timing (5 days, 2 days, or both)
+    - Temperature, conditions, and precipitation probability
+  - [x] Robust user profile management:
+    - Name, surname, email, phone, birth date storage
+    - Profile completeness verification
+    - Edit capabilities for all profile fields
+    - Calendar-based date picker for birth date
   - [x] Donation support (PayPal)
 
 - **Technical Features**
-  - [x] Weather API integration: Added real-time weather forecasts for hike locations
-  - [x] SQLite database integration: Implemented robust database system for storing all bot data
-  - [x] Automated database backup
-  - [x] Rate limiting: Implemented protection against spam and abuse
+  - [x] Group membership verification system
+  - [x] Markdown formatting for message aesthetics
+  - [x] Comprehensive error handling with user-friendly messages
+  - [x] Weather API integration with accuracy indicators based on forecast timeframe
+  - [x] Robust SQLite database integration with:
+    - Foreign key constraints
+    - Transaction support
+    - Data validation
+    - Parameterized queries for security
+  - [x] Automatic database backup functionality
+  - [x] Anti-spam protection through rate limiting
 
 ## 🐛 Known Issues
 
