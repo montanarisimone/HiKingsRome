@@ -804,10 +804,19 @@ def update_cost_amount(update, context):
         return show_cost_control_menu(update, context)
     
     amount_str = update.message.text.strip()
+    logger.info(f"Amount entered: '{amount_str}'")
     
     try:
         # Try to parse as float and validate
-        amount = float(amount_str.replace(',', '.'))
+        cleaned_amount = amount_str.replace(',', '.')
+
+        if cleaned_amount.count('.') > 1:
+            logger.warning(f"Invalid number format (too many decimal points): {cleaned_amount}")
+            raise ValueError("Invalid number format (too many decimal points)")
+            
+        amount = float(cleaned_amount)
+        logger.info(f"Float amount converted: {amount}")
+        
         if amount < 0:
             raise ValueError("Amount must be positive")
             
@@ -817,15 +826,24 @@ def update_cost_amount(update, context):
             update.effective_user.id,
             {'amount': amount}
         )
+
+        logger.info(f"Update result: {result}")
         
         if result['success']:
             update.message.reply_text(f"✅ Cost amount updated to {amount}€.")
         else:
             update.message.reply_text(f"❌ Failed to update: {result.get('error', 'Unknown error')}")
             
-    except ValueError:
+    except ValueError as e:
+        logger.error(f"Error parsing amount: {e}")
         update.message.reply_text(
-            "⚠️ Please enter a valid positive number (e.g., 15.50):"
+            "⚠️ Please enter a valid positive number. You can use either a dot or a comma as decimal separator (e.g., 15.50 or 15,50)):"
+        )
+        return COST_AMOUNT
+    except Exception as e:
+        logger.error(f"General error in update_cost_amount: {e}")
+        update.message.reply_text(
+            "⚠️ An unexpected error occurred. Please try again."
         )
         return COST_AMOUNT
     
