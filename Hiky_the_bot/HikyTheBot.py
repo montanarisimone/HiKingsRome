@@ -1039,19 +1039,35 @@ def handle_edit_cost_settings(update, context):
     query = update.callback_query
     query.answer()
 
-    # Extract hike_id from callback data
-    callback_data = query.data
-
+    # Log the full callback data for debugging
     logger.info(f"Edit costs callback data: {query.data}")
-    logger.info(f"Split result: {query.data.split('_')}")
 
-    match = re.search(r'admin_edit_costs_(\d+)', callback_data)
+    # Simple regex to extract the ID - capture just the digits at the end
+    match = re.search(r'admin_edit_costs_(\d+)$', query.data)
     if match:
-        hike_id = int(match.group(1))
-        logger.info(f"Extracted hike_id using regex: {hike_id}")
+        try:
+            hike_id = int(match.group(1))
+            logger.info(f"Successfully extracted hike_id: {hike_id}")
+        except ValueError:
+            logger.error(f"Failed to convert extracted value to integer: {match.group(1)}")
+            query.edit_message_text("Error processing hike ID")
+            return ADMIN_MENU
     else:
-        query.edit_message_text("Error identifying the hike.")
-        return ADMIN_MENU
+        # If regex fails, try a direct extraction of the last part
+        try:
+            parts = query.data.split('_')
+            last_part = parts[-1]
+            if last_part.isdigit():
+                hike_id = int(last_part)
+                logger.info(f"Extracted hike_id from last part: {hike_id}")
+            else:
+                logger.error(f"Last part is not a digit: {last_part}")
+                query.edit_message_text("Error identifying the hike")
+                return ADMIN_MENU
+        except Exception as e:
+            logger.error(f"Error extracting hike_id: {e}")
+            query.edit_message_text("Error processing request")
+            return ADMIN_MENU
         
     context.user_data['editing_hike_id'] = hike_id
     
