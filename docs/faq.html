@@ -9,7 +9,7 @@
   <link rel="shortcut icon"    href="assets/images/logo.png" type="image/png" />
   <link rel="apple-touch-icon" href="assets/images/logo.png" />
 
-  <!-- CSP — identica a index.html -->
+  <!-- CSP — no unsafe-inline, no external scripts -->
   <meta
     http-equiv="Content-Security-Policy"
     content="
@@ -42,7 +42,7 @@
   <meta property="og:type"        content="website" />
   <meta property="og:url"         content="https://www.hikingsrome.com/faq.html" />
   <meta property="og:title"       content="FAQ – HiKingsRome | Hiking near Rome" />
-  <meta property="og:description" content="Everything you need to know about HiKingsRome: how hikes are organised, costs, difficulty levels, Telegram and how to join." />
+  <meta property="og:description" content="Everything you need to know about HiKingsRome: how hikes are organised, costs, difficulty levels and how to join." />
   <meta property="og:image"       content="https://www.hikingsrome.com/assets/images/logo.png" />
   <meta property="og:image:alt"   content="HiKingsRome logo: hiker with trekking pole on a mountain landscape" />
   <meta property="og:locale"      content="en_GB" />
@@ -56,127 +56,10 @@
     href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600&display=swap"
   />
 
-  <!-- CSS -->
+  <!-- CSS — NO inline <style> block: all rules live in custom.css -->
   <link rel="stylesheet" href="assets/css/output.css" />
   <link rel="stylesheet" href="assets/css/custom.css" />
 
-  <style>
-    /* ── Accordion ─────────────────────────────────────────── */
-    .faq-item {
-      border-bottom: 1px solid #E8E3DC;
-    }
-    .faq-question {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      padding: 1.375rem 0;
-      text-align: left;
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: #1C2B1A;
-      font-family: 'Inter', system-ui, sans-serif;
-      font-size: 1rem;
-      font-weight: 600;
-      line-height: 1.4;
-    }
-    .faq-question:focus-visible {
-      outline: 3px solid #8B7355;
-      outline-offset: 2px;
-      border-radius: 4px;
-    }
-    .faq-icon {
-      flex-shrink: 0;
-      width: 1.25rem;
-      height: 1.25rem;
-      color: #4A6741;
-      transition: transform 0.25s ease;
-    }
-    .faq-item.open .faq-icon {
-      transform: rotate(45deg);
-    }
-    .faq-answer {
-      display: none;
-      padding-bottom: 1.375rem;
-      color: #1C2B1A;
-      opacity: 0.7;
-      font-size: 0.9375rem;
-      line-height: 1.75;
-    }
-    .faq-item.open .faq-answer {
-      display: block;
-    }
-    /* List inside answers */
-    .faq-answer ul {
-      margin-top: 0.75rem;
-      padding-left: 0;
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    .faq-answer ul li {
-      display: flex;
-      gap: 0.625rem;
-      align-items: flex-start;
-    }
-    .faq-answer ul li::before {
-      content: '';
-      flex-shrink: 0;
-      margin-top: 0.5rem;
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background-color: #4A6741;
-    }
-    /* Difficulty table */
-    .diff-table {
-      width: 100%;
-      margin-top: 0.875rem;
-      border-collapse: collapse;
-      font-size: 0.875rem;
-    }
-    .diff-table tr {
-      border-bottom: 1px solid #E8E3DC;
-    }
-    .diff-table tr:last-child {
-      border-bottom: none;
-    }
-    .diff-table td {
-      padding: 0.5rem 0.25rem;
-      vertical-align: top;
-    }
-    .diff-table td:first-child {
-      font-weight: 600;
-      white-space: nowrap;
-      padding-right: 1rem;
-      color: #1C2B1A;
-    }
-    .diff-badge {
-      display: inline-block;
-      padding: 0.15rem 0.6rem;
-      border-radius: 9999px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      margin-right: 0.5rem;
-      vertical-align: middle;
-    }
-    /* Category label above group of questions */
-    .faq-category {
-      padding-top: 2.5rem;
-      padding-bottom: 0.5rem;
-      font-size: 0.6875rem;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: #8B7355;
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .faq-icon { transition: none; }
-    }
-  </style>
 </head>
 
 <body class="bg-ivory text-forest antialiased">
@@ -298,22 +181,29 @@
     <!-- FAQ accordion -->
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
 
-      <!-- ── ABOUT THE PROJECT ── -->
-      <p class="faq-category" aria-hidden="true">About the project</p>
+      <!--
+        TREKKING POLE ICON — usata come toggle in ogni domanda.
+        È un SVG inline 24×24 px identico per tutti gli item.
+        Ruota di 45° via CSS quando .faq-item ha classe .open.
+        Il bastoncino è inclinato di default (a riposo = croce a ×).
+        Aperto = ruotato 45° → forma una X.
+      -->
+
+      <!-- ── ABOUT THE PROJECT ─────────────────────────────── -->
+      <p class="faq-category">About the project</p>
 
       <dl>
 
         <div class="faq-item" id="faq-what-is">
           <dt>
-            <button
-              class="faq-question"
-              aria-expanded="false"
-              aria-controls="answer-what-is"
-            >
+            <button class="faq-question" aria-expanded="false" aria-controls="answer-what-is">
               What is HiKingsRome?
-              <svg class="faq-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <line x1="10" y1="4" x2="10" y2="16"/>
-                <line x1="4"  y1="10" x2="16" y2="10"/>
+              <!-- Trekking pole SVG: shaft + grip + spike + wrist loop -->
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <line x1="12" y1="2"  x2="6"  y2="22"/>
+                <line x1="9"  y1="8"  x2="15" y2="8"/>
+                <line x1="6"  y1="22" x2="9"  y2="19"/>
+                <path d="M12 2 Q14 4 13 6" stroke-width="1.4"/>
               </svg>
             </button>
           </dt>
@@ -324,15 +214,13 @@
 
         <div class="faq-item" id="faq-who">
           <dt>
-            <button
-              class="faq-question"
-              aria-expanded="false"
-              aria-controls="answer-who"
-            >
+            <button class="faq-question" aria-expanded="false" aria-controls="answer-who">
               Who can join?
-              <svg class="faq-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <line x1="10" y1="4" x2="10" y2="16"/>
-                <line x1="4"  y1="10" x2="16" y2="10"/>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <line x1="12" y1="2"  x2="6"  y2="22"/>
+                <line x1="9"  y1="8"  x2="15" y2="8"/>
+                <line x1="6"  y1="22" x2="9"  y2="19"/>
+                <path d="M12 2 Q14 4 13 6" stroke-width="1.4"/>
               </svg>
             </button>
           </dt>
@@ -343,15 +231,13 @@
 
         <div class="faq-item" id="faq-why-join">
           <dt>
-            <button
-              class="faq-question"
-              aria-expanded="false"
-              aria-controls="answer-why-join"
-            >
+            <button class="faq-question" aria-expanded="false" aria-controls="answer-why-join">
               Why should I hike with you?
-              <svg class="faq-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <line x1="10" y1="4" x2="10" y2="16"/>
-                <line x1="4"  y1="10" x2="16" y2="10"/>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <line x1="12" y1="2"  x2="6"  y2="22"/>
+                <line x1="9"  y1="8"  x2="15" y2="8"/>
+                <line x1="6"  y1="22" x2="9"  y2="19"/>
+                <path d="M12 2 Q14 4 13 6" stroke-width="1.4"/>
               </svg>
             </button>
           </dt>
@@ -366,20 +252,18 @@
           </dd>
         </div>
 
-        <!-- ── HOW IT WORKS ── -->
-        <p class="faq-category" aria-hidden="true">How it works</p>
+        <!-- ── HOW IT WORKS ──────────────────────────────────── -->
+        <p class="faq-category">How it works</p>
 
         <div class="faq-item" id="faq-how">
           <dt>
-            <button
-              class="faq-question"
-              aria-expanded="false"
-              aria-controls="answer-how"
-            >
+            <button class="faq-question" aria-expanded="false" aria-controls="answer-how">
               How are the hikes organised?
-              <svg class="faq-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <line x1="10" y1="4" x2="10" y2="16"/>
-                <line x1="4"  y1="10" x2="16" y2="10"/>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <line x1="12" y1="2"  x2="6"  y2="22"/>
+                <line x1="9"  y1="8"  x2="15" y2="8"/>
+                <line x1="6"  y1="22" x2="9"  y2="19"/>
+                <path d="M12 2 Q14 4 13 6" stroke-width="1.4"/>
               </svg>
             </button>
           </dt>
@@ -390,26 +274,24 @@
 
         <div class="faq-item" id="faq-how-join">
           <dt>
-            <button
-              class="faq-question"
-              aria-expanded="false"
-              aria-controls="answer-how-join"
-            >
+            <button class="faq-question" aria-expanded="false" aria-controls="answer-how-join">
               How do I join a hike?
-              <svg class="faq-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <line x1="10" y1="4" x2="10" y2="16"/>
-                <line x1="4"  y1="10" x2="16" y2="10"/>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <line x1="12" y1="2"  x2="6"  y2="22"/>
+                <line x1="9"  y1="8"  x2="15" y2="8"/>
+                <line x1="6"  y1="22" x2="9"  y2="19"/>
+                <path d="M12 2 Q14 4 13 6" stroke-width="1.4"/>
               </svg>
             </button>
           </dt>
           <dd class="faq-answer" id="answer-how-join">
             Just join our Telegram group. Once you're in, you'll see the details for each upcoming hike and a sign-up poll. Select the dates you're interested in and the rest unfolds there — carpooling, meeting points, and any questions you might have. That's it.
-            <br/><br/>
+            <br /><br />
             <a
               href="https://t.me/hikingsrome"
               target="_blank"
               rel="noopener noreferrer"
-              class="btn-primary inline-flex px-5 py-2.5 text-sm mt-1"
+              class="btn-primary px-5 py-2.5 text-sm mt-1"
               aria-label="Join the Telegram group (opens in a new tab)"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
@@ -422,15 +304,13 @@
 
         <div class="faq-item" id="faq-cost">
           <dt>
-            <button
-              class="faq-question"
-              aria-expanded="false"
-              aria-controls="answer-cost"
-            >
+            <button class="faq-question" aria-expanded="false" aria-controls="answer-cost">
               How much does it cost?
-              <svg class="faq-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <line x1="10" y1="4" x2="10" y2="16"/>
-                <line x1="4"  y1="10" x2="16" y2="10"/>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <line x1="12" y1="2"  x2="6"  y2="22"/>
+                <line x1="9"  y1="8"  x2="15" y2="8"/>
+                <line x1="6"  y1="22" x2="9"  y2="19"/>
+                <path d="M12 2 Q14 4 13 6" stroke-width="1.4"/>
               </svg>
             </button>
           </dt>
@@ -441,15 +321,13 @@
 
         <div class="faq-item" id="faq-transport">
           <dt>
-            <button
-              class="faq-question"
-              aria-expanded="false"
-              aria-controls="answer-transport"
-            >
+            <button class="faq-question" aria-expanded="false" aria-controls="answer-transport">
               How do we get to the trailhead?
-              <svg class="faq-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <line x1="10" y1="4" x2="10" y2="16"/>
-                <line x1="4"  y1="10" x2="16" y2="10"/>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <line x1="12" y1="2"  x2="6"  y2="22"/>
+                <line x1="9"  y1="8"  x2="15" y2="8"/>
+                <line x1="6"  y1="22" x2="9"  y2="19"/>
+                <path d="M12 2 Q14 4 13 6" stroke-width="1.4"/>
               </svg>
             </button>
           </dt>
@@ -460,15 +338,13 @@
 
         <div class="faq-item" id="faq-language">
           <dt>
-            <button
-              class="faq-question"
-              aria-expanded="false"
-              aria-controls="answer-language"
-            >
+            <button class="faq-question" aria-expanded="false" aria-controls="answer-language">
               What language do you speak on the hikes?
-              <svg class="faq-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <line x1="10" y1="4" x2="10" y2="16"/>
-                <line x1="4"  y1="10" x2="16" y2="10"/>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <line x1="12" y1="2"  x2="6"  y2="22"/>
+                <line x1="9"  y1="8"  x2="15" y2="8"/>
+                <line x1="6"  y1="22" x2="9"  y2="19"/>
+                <path d="M12 2 Q14 4 13 6" stroke-width="1.4"/>
               </svg>
             </button>
           </dt>
@@ -477,20 +353,18 @@
           </dd>
         </div>
 
-        <!-- ── DIFFICULTY ── -->
-        <p class="faq-category" aria-hidden="true">Trails & difficulty</p>
+        <!-- ── TRAILS & DIFFICULTY ───────────────────────────── -->
+        <p class="faq-category">Trails &amp; difficulty</p>
 
         <div class="faq-item" id="faq-difficulty">
           <dt>
-            <button
-              class="faq-question"
-              aria-expanded="false"
-              aria-controls="answer-difficulty"
-            >
+            <button class="faq-question" aria-expanded="false" aria-controls="answer-difficulty">
               How does the difficulty scale work?
-              <svg class="faq-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <line x1="10" y1="4" x2="10" y2="16"/>
-                <line x1="4"  y1="10" x2="16" y2="10"/>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <line x1="12" y1="2"  x2="6"  y2="22"/>
+                <line x1="9"  y1="8"  x2="15" y2="8"/>
+                <line x1="6"  y1="22" x2="9"  y2="19"/>
+                <path d="M12 2 Q14 4 13 6" stroke-width="1.4"/>
               </svg>
             </button>
           </dt>
@@ -515,7 +389,7 @@
                   <td>Steeper climbs, uneven ground, or longer distances.</td>
                 </tr>
                 <tr>
-                  <td><span class="diff-badge" style="background:#FFCCBC;color:#BF360C;">Difficult</span></td>
+                  <td><span class="diff-badge" style="background:#FFCCBC;color:#BF360C;">Challenging</span></td>
                   <td>Technical terrain, steep ascents, and potential natural obstacles.</td>
                 </tr>
               </tbody>
@@ -523,20 +397,18 @@
           </dd>
         </div>
 
-        <!-- ── TELEGRAM ── -->
-        <p class="faq-category" aria-hidden="true">Telegram</p>
+        <!-- ── TELEGRAM ──────────────────────────────────────── -->
+        <p class="faq-category">Telegram</p>
 
         <div class="faq-item" id="faq-telegram">
           <dt>
-            <button
-              class="faq-question"
-              aria-expanded="false"
-              aria-controls="answer-telegram"
-            >
+            <button class="faq-question" aria-expanded="false" aria-controls="answer-telegram">
               Why do you use Telegram?
-              <svg class="faq-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <line x1="10" y1="4" x2="10" y2="16"/>
-                <line x1="4"  y1="10" x2="16" y2="10"/>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <line x1="12" y1="2"  x2="6"  y2="22"/>
+                <line x1="9"  y1="8"  x2="15" y2="8"/>
+                <line x1="6"  y1="22" x2="9"  y2="19"/>
+                <path d="M12 2 Q14 4 13 6" stroke-width="1.4"/>
               </svg>
             </button>
           </dt>
@@ -547,15 +419,13 @@
 
         <div class="faq-item" id="faq-telegram-privacy">
           <dt>
-            <button
-              class="faq-question"
-              aria-expanded="false"
-              aria-controls="answer-telegram-privacy"
-            >
+            <button class="faq-question" aria-expanded="false" aria-controls="answer-telegram-privacy">
               Do I need to share my phone number to join?
-              <svg class="faq-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <line x1="10" y1="4" x2="10" y2="16"/>
-                <line x1="4"  y1="10" x2="16" y2="10"/>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <line x1="12" y1="2"  x2="6"  y2="22"/>
+                <line x1="9"  y1="8"  x2="15" y2="8"/>
+                <line x1="6"  y1="22" x2="9"  y2="19"/>
+                <path d="M12 2 Q14 4 13 6" stroke-width="1.4"/>
               </svg>
             </button>
           </dt>
@@ -596,13 +466,7 @@
 
       <div>
         <div class="flex items-center gap-2.5 mb-4">
-          <img
-            src="assets/images/logo.png"
-            alt="HiKingsRome logo"
-            class="logo-footer"
-            width="32" height="32"
-            loading="lazy"
-          />
+          <img src="assets/images/logo.png" alt="HiKingsRome logo" class="logo-footer" width="32" height="32" loading="lazy" />
           <span class="font-display text-lg text-ivory">HiKingsRome</span>
         </div>
         <p class="text-ivory/55 text-sm leading-relaxed max-w-xs">
@@ -665,13 +529,9 @@
         <p>© <span id="footer-year"></span> HiKingsRome. All rights reserved.</p>
         <p>
           Open source on
-          <a
-            href="https://github.com/montanarisimone/HiKingsRome"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="underline underline-offset-2 hover:text-ivory/70 transition-colors"
-            aria-label="HiKingsRome GitHub repository (opens in a new tab)"
-          >GitHub</a>
+          <a href="https://github.com/montanarisimone/HiKingsRome" target="_blank" rel="noopener noreferrer"
+             class="underline underline-offset-2 hover:text-ivory/70 transition-colors"
+             aria-label="HiKingsRome GitHub repository (opens in a new tab)">GitHub</a>
         </p>
       </div>
     </div>
