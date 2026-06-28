@@ -1,0 +1,55 @@
+name: Deploy Tailwind Site to GitHub Pages
+
+on:
+  push:
+    branches: ["main"] # Si attiva ogni volta che fai un push sul branch main
+  workflow_dispatch: # Permette anche l'avvio manuale
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Tailwind CSS CLI
+        run: npm install -D tailwindcss
+
+      - name: Build Tailwind CSS static file
+        run: |
+          # Compila il CSS cercando le classi usate in tutti i file HTML dentro la cartella docs
+          npx tailwindcss -i ./docs/assets/css/input.css -o ./docs/assets/css/output.css --minify --content "./docs/**/*.html"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Diciamo a GitHub di pubblicare il contenuto della cartella docs
+          path: './docs'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps:call-deploy.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: call-deploy
+        uses: actions/deploy-pages@v4
