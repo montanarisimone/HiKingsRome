@@ -1,1 +1,746 @@
-sdsds
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- ═══════════════════════════════════════════════
+       FAVICON — logo ufficiale del progetto
+  ════════════════════════════════════════════════ -->
+  <link rel="icon"            href="assets/images/logo.png" type="image/png" />
+  <link rel="shortcut icon"   href="assets/images/logo.png" type="image/png" />
+  <link rel="apple-touch-icon" href="assets/images/logo.png" />
+
+  <!-- ═══════════════════════════════════════════════
+       SECURITY — Content Security Policy
+       Consente script SOLO da cdn.tailwindcss.com.
+       Consente stili da Tailwind CDN + Google Fonts.
+       'unsafe-inline' necessario per il play-CDN di Tailwind
+       (inietta stili runtime); da rimuovere con la build CLI.
+       frame-ancestors 'none' → anti-clickjacking.
+  ════════════════════════════════════════════════ -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src   'none';
+    script-src    'self' https://cdn.tailwindcss.com;
+    style-src     'self' https://cdn.tailwindcss.com https://fonts.googleapis.com 'unsafe-inline';
+    font-src      'self' https://fonts.gstatic.com;
+    img-src       'self' data: https:;
+    connect-src   'none';
+    frame-src     'none';
+    frame-ancestors 'none';
+    base-uri      'self';
+    form-action   'none';
+  " />
+  <meta http-equiv="X-Content-Type-Options"  content="nosniff" />
+  <meta http-equiv="Referrer-Policy"         content="strict-origin-when-cross-origin" />
+  <meta http-equiv="Permissions-Policy"      content="geolocation=(), camera=(), microphone=()" />
+
+  <!-- ═══════════════════════════════════════════════
+       SEO — Titolo & Descrizione (≤155 char)
+  ════════════════════════════════════════════════ -->
+  <title>HiKingsRome – Trekking e Escursioni Intorno a Roma</title>
+  <meta name="description" content="Unisciti a HiKingsRome: escursioni di trekking nei dintorni di Roma ogni weekend. Comunità gratuita, calendario uscite e sentieri nella natura laziale." />
+  <meta name="robots"    content="index, follow" />
+  <link rel="canonical"  href="https://hikingsrome.github.io/index.html" />
+
+  <!-- ═══════════════════════════════════════════════
+       SEO — Open Graph  (Telegram · WhatsApp · FB)
+       og:image punta al logo per anteprime immediate
+       anche prima che hero.jpg esista in produzione.
+  ════════════════════════════════════════════════ -->
+  <meta property="og:type"        content="website" />
+  <meta property="og:url"         content="https://hikingsrome.github.io/index.html" />
+  <meta property="og:title"       content="HiKingsRome – Trekking e Escursioni Intorno a Roma" />
+  <meta property="og:description" content="Escursioni di trekking nei dintorni di Roma ogni weekend. Community gratuita — unisciti su Telegram." />
+  <meta property="og:image"       content="https://hikingsrome.github.io/assets/images/logo.png" />
+  <meta property="og:image:alt"   content="Logo HiKingsRome: escursionista con bastoncino su paesaggio montano" />
+  <meta property="og:locale"      content="it_IT" />
+  <meta property="og:site_name"   content="HiKingsRome" />
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card"        content="summary" />
+  <meta name="twitter:title"       content="HiKingsRome – Trekking e Escursioni Intorno a Roma" />
+  <meta name="twitter:description" content="Escursioni di trekking nei dintorni di Roma ogni weekend. Community gratuita su Telegram." />
+  <meta name="twitter:image"       content="https://hikingsrome.github.io/assets/images/logo.png" />
+  <meta name="twitter:image:alt"   content="Logo HiKingsRome: escursionista su paesaggio montano" />
+
+  <!-- ═══════════════════════════════════════════════
+       FONTS — Google Fonts (HTTPS · SRI non disponibile
+       per URL dinamici; sicurezza garantita da CSP)
+  ════════════════════════════════════════════════ -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- Tailwind CSS play-CDN
+       NOTA SRI: il play-CDN genera il bundle runtime, quindi
+       l'hash cambia ad ogni richiesta → SRI non applicabile.
+       In produzione: usare la build CLI + file CSS statico + SRI. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- ═══════════════════════════════════════════════
+       TAILWIND CONFIG — Token di design HiKingsRome
+  ════════════════════════════════════════════════ -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            forest: '#1C2B1A',
+            sage:   '#4A6741',
+            ivory:  '#F5F2EE',
+            sand:   '#E8E3DC',
+            earth:  '#8B7355',
+          },
+          fontFamily: {
+            display: ['"DM Serif Display"', 'Georgia', 'serif'],
+            body:    ['Inter', 'system-ui', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background-color: #F5F2EE;
+      color: #1C2B1A;
+    }
+
+    /* ── Display font helper ── */
+    .font-display { font-family: 'DM Serif Display', Georgia, serif; }
+
+    /* ── Navbar shadow on scroll ── */
+    .nav-scrolled { box-shadow: 0 1px 16px rgba(28,43,26,.10); }
+
+    /* ── Logo navbar: cerchio con sfondo bianco per contrasto
+          sul header ivory/traslucido ── */
+    .logo-navbar {
+      height: 2.25rem;        /* h-9 */
+      width:  2.25rem;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #fff;
+      box-shadow: 0 0 0 1px rgba(28,43,26,.08);
+      flex-shrink: 0;
+    }
+
+    /* ── Logo footer: leggermente più grande su sfondo scuro ── */
+    .logo-footer {
+      height: 2rem;
+      width:  2rem;
+      border-radius: 50%;
+      object-fit: cover;
+      background: rgba(255,255,255,.15);
+      flex-shrink: 0;
+    }
+
+    /* ── FIRMA: linea percorso topografico ── */
+    .trail-line { position: relative; }
+    .trail-line::before {
+      content: '';
+      position: absolute;
+      left: 1.15rem;
+      top: 0; bottom: 0;
+      width: 2px;
+      background: repeating-linear-gradient(
+        to bottom,
+        #4A6741 0px, #4A6741 6px,
+        transparent 6px, transparent 14px
+      );
+    }
+
+    /* ── Feature card con bordo sinistro ── */
+    .feature-card {
+      border-left: 3px solid #4A6741;
+      transition: border-color .2s, transform .2s;
+    }
+    .feature-card:hover {
+      border-left-color: #8B7355;
+      transform: translateX(3px);
+    }
+
+    /* ── Hero: placeholder gradiente se hero.jpg assente ── */
+    .hero-placeholder {
+      background: linear-gradient(135deg, #C8D5C6 0%, #A8BC9F 50%, #8B7355 100%);
+    }
+
+    /* ── CTA button ── */
+    .btn-primary {
+      background-color: #4A6741;
+      color: #F5F2EE;
+      transition: background-color .2s, transform .15s;
+    }
+    .btn-primary:hover       { background-color: #1C2B1A; transform: translateY(-1px); }
+    .btn-primary:focus-visible {
+      outline: 3px solid #8B7355;
+      outline-offset: 3px;
+    }
+
+    /* ── Outline button ── */
+    .btn-outline {
+      border: 2px solid #4A6741;
+      color: #4A6741;
+      transition: background-color .2s, color .2s;
+    }
+    .btn-outline:hover        { background-color: #4A6741; color: #F5F2EE; }
+    .btn-outline:focus-visible {
+      outline: 3px solid #8B7355;
+      outline-offset: 3px;
+    }
+
+    /* ── Skip link accessibilità ── */
+    .skip-link {
+      position: absolute;
+      left: -9999px; top: 1rem;
+      background: #1C2B1A; color: #F5F2EE;
+      padding: .5rem 1rem; border-radius: 4px;
+      z-index: 9999; font-size: .875rem; font-weight: 600;
+    }
+    .skip-link:focus { left: 1rem; }
+
+    /* ── Rispetta preferenza riduzione movimento ── */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+
+<body class="bg-ivory text-forest antialiased">
+
+  <!-- Accessibilità: salta al contenuto principale -->
+  <a class="skip-link" href="#main-content">Salta al contenuto principale</a>
+
+  <!-- ════════════════════════════════════════════
+       NAVBAR — sticky, mobile-first
+  ═════════════════════════════════════════════ -->
+  <header
+    class="sticky top-0 z-50 bg-ivory/95 backdrop-blur-sm border-b border-sand transition-shadow duration-300"
+    id="site-header"
+  >
+    <nav
+      class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16"
+      aria-label="Navigazione principale"
+    >
+
+      <!-- ── Brand: logo + testo ── -->
+      <a
+        href="index.html"
+        class="flex items-center gap-2.5 group"
+        aria-label="HiKingsRome – torna alla Home"
+      >
+        <img
+          src="assets/images/logo.png"
+          alt="Logo HiKingsRome: escursionista con bastoncino su paesaggio montano"
+          class="logo-navbar"
+          width="36" height="36"
+          loading="eager"
+        />
+        <span class="font-display text-xl tracking-tight text-forest group-hover:text-sage transition-colors">
+          HiKingsRome
+        </span>
+      </a>
+
+      <!-- ── Link desktop ── -->
+      <ul class="hidden md:flex items-center gap-8 text-sm font-medium" role="list">
+        <li>
+          <a href="index.html"
+             class="text-sage border-b-2 border-sage pb-0.5"
+             aria-current="page">Home</a>
+        </li>
+        <li>
+          <a href="progetto.html"
+             class="text-forest/70 hover:text-sage transition-colors">Il Progetto</a>
+        </li>
+        <li>
+          <a href="calendario.html"
+             class="text-forest/70 hover:text-sage transition-colors">Calendario</a>
+        </li>
+        <li>
+          <a href="faq.html"
+             class="text-forest/70 hover:text-sage transition-colors">FAQ</a>
+        </li>
+      </ul>
+
+      <!-- ── CTA Telegram desktop ── -->
+      <a
+        href="https://t.me/hikingsrome"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="btn-primary hidden md:inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold"
+        aria-label="Unisciti al gruppo Telegram di HiKingsRome (si apre in una nuova scheda)"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.15.67-.54.834-1.094.518l-3.02-2.226-1.457 1.402c-.162.162-.297.297-.608.297l.216-3.08 5.596-5.056c.243-.216-.054-.336-.378-.12L6.93 14.4 3.95 13.49c-.648-.202-.66-.648.135-.96l10.8-4.164c.54-.195 1.012.12.677.882z"/>
+        </svg>
+        Telegram
+      </a>
+
+      <!-- ── Hamburger mobile ── -->
+      <button
+        id="mobile-menu-btn"
+        class="md:hidden p-2 rounded-md text-forest hover:bg-sand transition-colors"
+        aria-expanded="false"
+        aria-controls="mobile-menu"
+        aria-label="Apri menu di navigazione"
+        type="button"
+      >
+        <svg id="icon-menu"  width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="3" y1="6"  x2="19" y2="6"/>
+          <line x1="3" y1="11" x2="19" y2="11"/>
+          <line x1="3" y1="16" x2="19" y2="16"/>
+        </svg>
+        <svg id="icon-close" width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="hidden" aria-hidden="true">
+          <line x1="4"  y1="4"  x2="18" y2="18"/>
+          <line x1="18" y1="4"  x2="4"  y2="18"/>
+        </svg>
+      </button>
+    </nav>
+
+    <!-- ── Menu mobile ── -->
+    <div
+      id="mobile-menu"
+      class="hidden md:hidden bg-ivory border-t border-sand"
+      role="navigation"
+      aria-label="Navigazione mobile"
+    >
+      <ul class="flex flex-col px-4 py-4 gap-4 text-sm font-medium" role="list">
+        <li><a href="index.html"      class="block text-sage font-semibold" aria-current="page">Home</a></li>
+        <li><a href="progetto.html"   class="block text-forest/70 hover:text-sage transition-colors">Il Progetto</a></li>
+        <li><a href="calendario.html" class="block text-forest/70 hover:text-sage transition-colors">Calendario</a></li>
+        <li><a href="faq.html"        class="block text-forest/70 hover:text-sage transition-colors">FAQ</a></li>
+        <li class="pt-2 border-t border-sand">
+          <a
+            href="https://t.me/hikingsrome"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold"
+            aria-label="Unisciti al gruppo Telegram (si apre in una nuova scheda)"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.15.67-.54.834-1.094.518l-3.02-2.226-1.457 1.402c-.162.162-.297.297-.608.297l.216-3.08 5.596-5.056c.243-.216-.054-.336-.378-.12L6.93 14.4 3.95 13.49c-.648-.202-.66-.648.135-.96l10.8-4.164c.54-.195 1.012.12.677.882z"/>
+            </svg>
+            Unisciti su Telegram
+          </a>
+        </li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- ════════════════════════════════════════════
+       MAIN
+  ═════════════════════════════════════════════ -->
+  <main id="main-content">
+
+    <!-- ── HERO ── -->
+    <section
+      class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24 grid md:grid-cols-2 gap-12 items-center"
+      aria-labelledby="hero-heading"
+    >
+      <!-- Testo -->
+      <div class="order-2 md:order-1">
+        <p class="text-earth text-sm font-semibold uppercase tracking-widest mb-4">
+          Escursioni · Roma &amp; Dintorni
+        </p>
+        <h1 id="hero-heading" class="font-display text-4xl sm:text-5xl lg:text-6xl leading-tight text-forest mb-6">
+          Cammina.<br />
+          <em class="not-italic text-sage">Esplora.</em><br />
+          Condividi.
+        </h1>
+        <p class="text-forest/70 text-lg leading-relaxed mb-8 max-w-md">
+          HiKingsRome è la community di trekking attorno a Roma. Organizziamo uscite nei
+          Castelli Romani, sui Monti Lepini e lungo le antiche vie consolari — per tutti i livelli,
+          ogni weekend.
+        </p>
+        <div class="flex flex-wrap gap-4">
+          <a
+            href="https://t.me/hikingsrome"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-primary inline-flex items-center gap-2 px-6 py-3 rounded-full text-base font-semibold"
+            aria-label="Unisciti al gruppo Telegram di HiKingsRome (si apre in una nuova scheda)"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.15.67-.54.834-1.094.518l-3.02-2.226-1.457 1.402c-.162.162-.297.297-.608.297l.216-3.08 5.596-5.056c.243-.216-.054-.336-.378-.12L6.93 14.4 3.95 13.49c-.648-.202-.66-.648.135-.96l10.8-4.164c.54-.195 1.012.12.677.882z"/>
+            </svg>
+            Unisciti al gruppo Telegram
+          </a>
+          <a
+            href="calendario.html"
+            class="btn-outline inline-flex items-center gap-2 px-6 py-3 rounded-full text-base font-semibold"
+          >
+            Vedi il calendario
+          </a>
+        </div>
+      </div>
+
+      <!-- Immagine hero -->
+      <div class="order-1 md:order-2">
+        <div class="relative rounded-2xl overflow-hidden aspect-[4/3] hero-placeholder">
+          <img
+            src="assets/images/hero.jpg"
+            alt="Escursionisti lungo un sentiero nei dintorni di Roma, con vista panoramica sui colli laziali"
+            class="w-full h-full object-cover"
+            width="800" height="600"
+            loading="eager"
+            onerror="this.style.display='none'"
+          />
+          <!-- Badge sovrapposto -->
+          <div class="absolute bottom-4 left-4 bg-forest/80 backdrop-blur-sm text-ivory rounded-xl px-4 py-2.5 text-sm">
+            <span class="font-semibold">📍 Lazio &amp; dintorni</span>
+            <span class="block text-ivory/70 text-xs mt-0.5">Ogni weekend, tutto l'anno</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── STRIP STATISTICHE ── -->
+    <section
+      class="bg-forest text-ivory"
+      aria-label="I numeri della community HiKingsRome"
+    >
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+        <div>
+          <p class="font-display text-3xl text-sand">200+</p>
+          <p class="text-ivory/60 text-sm mt-1">Membri attivi</p>
+        </div>
+        <div>
+          <p class="font-display text-3xl text-sand">50+</p>
+          <p class="text-ivory/60 text-sm mt-1">Percorsi esplorati</p>
+        </div>
+        <div>
+          <p class="font-display text-3xl text-sand">12</p>
+          <p class="text-ivory/60 text-sm mt-1">Uscite al mese</p>
+        </div>
+        <div>
+          <p class="font-display text-3xl text-sand">0 €</p>
+          <p class="text-ivory/60 text-sm mt-1">Costo di partecipazione</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── PUNTI DI FORZA (firma: trail-line) ── -->
+    <section
+      class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-20"
+      aria-labelledby="features-heading"
+    >
+      <div class="max-w-xl mb-14">
+        <h2 id="features-heading" class="font-display text-3xl sm:text-4xl text-forest mb-4">
+          Perché camminare con noi
+        </h2>
+        <p class="text-forest/60 text-base leading-relaxed">
+          Niente quote, niente burocrazia. Solo sentieri, aria buona e persone appassionate.
+        </p>
+      </div>
+
+      <!-- Linea tratteggiata verticale: evoca un tracciato GPS/topografico -->
+      <div class="trail-line pl-10 flex flex-col gap-8">
+
+        <article class="feature-card bg-white rounded-xl p-6 shadow-sm relative">
+          <div
+            class="absolute -left-[2.15rem] top-6 w-5 h-5 rounded-full bg-sage border-2 border-ivory flex items-center justify-center"
+            aria-hidden="true"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="#F5F2EE"><circle cx="5" cy="5" r="3"/></svg>
+          </div>
+          <h3 class="font-semibold text-forest mb-2">Uscite per tutti i livelli</h3>
+          <p class="text-forest/60 text-sm leading-relaxed">
+            Dal principiante assoluto all'escursionista esperto: ogni uscita indica chiaramente
+            difficoltà, dislivello e durata stimata.
+          </p>
+        </article>
+
+        <article class="feature-card bg-white rounded-xl p-6 shadow-sm relative">
+          <div
+            class="absolute -left-[2.15rem] top-6 w-5 h-5 rounded-full bg-sage border-2 border-ivory flex items-center justify-center"
+            aria-hidden="true"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="#F5F2EE"><circle cx="5" cy="5" r="3"/></svg>
+          </div>
+          <h3 class="font-semibold text-forest mb-2">Organizzazione trasparente</h3>
+          <p class="text-forest/60 text-sm leading-relaxed">
+            Punto di ritrovo, orari e dettagli del percorso pubblicati in anticipo sul canale Telegram.
+            Sondaggio di partecipazione integrato nel bot.
+          </p>
+        </article>
+
+        <article class="feature-card bg-white rounded-xl p-6 shadow-sm relative">
+          <div
+            class="absolute -left-[2.15rem] top-6 w-5 h-5 rounded-full bg-sage border-2 border-ivory flex items-center justify-center"
+            aria-hidden="true"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="#F5F2EE"><circle cx="5" cy="5" r="3"/></svg>
+          </div>
+          <h3 class="font-semibold text-forest mb-2">Territorio laziale autentico</h3>
+          <p class="text-forest/60 text-sm leading-relaxed">
+            Sentieri meno conosciuti, riserve naturali, borghi medievali e panorami sulla campagna
+            romana — lontano dai circuiti turistici di massa.
+          </p>
+        </article>
+
+        <article class="feature-card bg-white rounded-xl p-6 shadow-sm relative">
+          <div
+            class="absolute -left-[2.15rem] top-6 w-5 h-5 rounded-full bg-earth border-2 border-ivory flex items-center justify-center"
+            aria-hidden="true"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="#F5F2EE"><circle cx="5" cy="5" r="3"/></svg>
+          </div>
+          <h3 class="font-semibold text-forest mb-2">Community genuina, senza fini di lucro</h3>
+          <p class="text-forest/60 text-sm leading-relaxed">
+            Un gruppo informale di appassionati. L'obiettivo è camminare insieme, non vendere tour o
+            raccogliere iscrizioni.
+          </p>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- ── ANTEPRIMA PROSSIME USCITE ── -->
+    <section
+      class="bg-sand/40 py-20"
+      aria-labelledby="preview-heading"
+    >
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-12">
+          <div>
+            <h2 id="preview-heading" class="font-display text-3xl sm:text-4xl text-forest mb-2">
+              Prossime uscite
+            </h2>
+            <p class="text-forest/60 text-base">Una selezione degli appuntamenti in arrivo.</p>
+          </div>
+          <a
+            href="calendario.html"
+            class="text-sage text-sm font-semibold underline underline-offset-4 hover:text-forest transition-colors self-start sm:self-auto whitespace-nowrap"
+          >
+            Calendario completo →
+          </a>
+        </div>
+
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+
+          <!-- Card uscita 1 -->
+          <article class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group">
+            <div class="h-40 bg-gradient-to-br from-sage/30 to-earth/20 flex items-end p-4">
+              <span class="bg-forest text-ivory text-xs font-semibold px-3 py-1 rounded-full">Facile</span>
+            </div>
+            <div class="p-5">
+              <p class="text-earth text-xs font-semibold uppercase tracking-wider mb-1">Sab 5 Lug · 08:00</p>
+              <h3 class="font-semibold text-forest text-base mb-2 group-hover:text-sage transition-colors">
+                Lago di Nemi &amp; Bosco Ritrovato
+              </h3>
+              <p class="text-forest/55 text-sm leading-relaxed">
+                Anello panoramico attorno al lago vulcanico più suggestivo dei Castelli Romani.
+                7 km · 150 m D+.
+              </p>
+            </div>
+          </article>
+
+          <!-- Card uscita 2 -->
+          <article class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group">
+            <div class="h-40 bg-gradient-to-br from-earth/25 to-sage/20 flex items-end p-4">
+              <span class="bg-earth text-ivory text-xs font-semibold px-3 py-1 rounded-full">Medio</span>
+            </div>
+            <div class="p-5">
+              <p class="text-earth text-xs font-semibold uppercase tracking-wider mb-1">Dom 13 Lug · 07:30</p>
+              <h3 class="font-semibold text-forest text-base mb-2 group-hover:text-sage transition-colors">
+                Monte Artemisio &amp; Via Sacra
+              </h3>
+              <p class="text-forest/55 text-sm leading-relaxed">
+                Dorsale dei Castelli con vista su Roma e sul mare. 12 km · 400 m D+. Consigliati bastoncini.
+              </p>
+            </div>
+          </article>
+
+          <!-- Card uscita 3 -->
+          <article class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group">
+            <div class="h-40 bg-gradient-to-br from-forest/20 to-sage/30 flex items-end p-4">
+              <span class="bg-sage text-ivory text-xs font-semibold px-3 py-1 rounded-full">Impegnativo</span>
+            </div>
+            <div class="p-5">
+              <p class="text-earth text-xs font-semibold uppercase tracking-wider mb-1">Sab 19 Lug · 07:00</p>
+              <h3 class="font-semibold text-forest text-base mb-2 group-hover:text-sage transition-colors">
+                Monti Lepini: Cima del Semprevisa
+              </h3>
+              <p class="text-forest/55 text-sm leading-relaxed">
+                Vetta a 1536 m. Panorama su Roma, Pontino e Appennini. 16 km · 900 m D+.
+              </p>
+            </div>
+          </article>
+
+        </div>
+
+        <!-- CTA centrale -->
+        <div class="text-center mt-12">
+          <a
+            href="https://t.me/hikingsrome"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-primary inline-flex items-center gap-2 px-8 py-3.5 rounded-full text-base font-semibold"
+            aria-label="Partecipa alle uscite su Telegram (si apre in una nuova scheda)"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.15.67-.54.834-1.094.518l-3.02-2.226-1.457 1.402c-.162.162-.297.297-.608.297l.216-3.08 5.596-5.056c.243-.216-.054-.336-.378-.12L6.93 14.4 3.95 13.49c-.648-.202-.66-.648.135-.96l10.8-4.164c.54-.195 1.012.12.677.882z"/>
+            </svg>
+            Partecipa alle uscite
+          </a>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ════════════════════════════════════════════
+       FOOTER
+  ═════════════════════════════════════════════ -->
+  <footer class="bg-forest text-ivory/80" role="contentinfo">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid sm:grid-cols-2 md:grid-cols-3 gap-10">
+
+      <!-- Brand -->
+      <div>
+        <div class="flex items-center gap-2.5 mb-4">
+          <img
+            src="assets/images/logo.png"
+            alt="Logo HiKingsRome"
+            class="logo-footer"
+            width="32" height="32"
+            loading="lazy"
+          />
+          <span class="font-display text-lg text-ivory">HiKingsRome</span>
+        </div>
+        <p class="text-ivory/55 text-sm leading-relaxed max-w-xs">
+          Community di trekking nei dintorni di Roma. Organizziamo uscite ogni weekend,
+          senza fini di lucro.
+        </p>
+      </div>
+
+      <!-- Nav footer -->
+      <nav aria-label="Link di navigazione nel footer">
+        <h2 class="text-ivory text-sm font-semibold mb-4 uppercase tracking-wider">Sezioni</h2>
+        <ul class="flex flex-col gap-3 text-sm" role="list">
+          <li><a href="index.html"      class="hover:text-ivory transition-colors">Home</a></li>
+          <li><a href="progetto.html"   class="hover:text-ivory transition-colors">Il Progetto</a></li>
+          <li><a href="calendario.html" class="hover:text-ivory transition-colors">Calendario</a></li>
+          <li><a href="faq.html"        class="hover:text-ivory transition-colors">FAQ</a></li>
+        </ul>
+      </nav>
+
+      <!-- Social -->
+      <div>
+        <h2 class="text-ivory text-sm font-semibold mb-4 uppercase tracking-wider">Seguici</h2>
+        <ul class="flex flex-col gap-3 text-sm" role="list">
+
+          <li>
+            <a
+              href="https://t.me/hikingsrome"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center gap-2.5 hover:text-ivory transition-colors"
+              aria-label="Canale Telegram HiKingsRome (si apre in una nuova scheda)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.15.67-.54.834-1.094.518l-3.02-2.226-1.457 1.402c-.162.162-.297.297-.608.297l.216-3.08 5.596-5.056c.243-.216-.054-.336-.378-.12L6.93 14.4 3.95 13.49c-.648-.202-.66-.648.135-.96l10.8-4.164c.54-.195 1.012.12.677.882z"/>
+              </svg>
+              Telegram
+            </a>
+          </li>
+
+          <li>
+            <a
+              href="https://www.instagram.com/hikingsrome"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center gap-2.5 hover:text-ivory transition-colors"
+              aria-label="Profilo Instagram HiKingsRome (si apre in una nuova scheda)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                <circle cx="12" cy="12" r="4"/>
+                <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+              </svg>
+              Instagram
+            </a>
+          </li>
+
+          <li>
+            <a
+              href="https://www.strava.com/clubs/hikingsrome"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center gap-2.5 hover:text-ivory transition-colors"
+              aria-label="Club Strava HiKingsRome (si apre in una nuova scheda)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L8.38 0 0 13.828h4.171"/>
+              </svg>
+              Strava
+            </a>
+          </li>
+
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Bottom bar -->
+    <div class="border-t border-white/10">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-ivory/40">
+        <p>© <span id="footer-year"></span> HiKingsRome. Tutti i diritti riservati.</p>
+        <p>
+          Progetto open source su
+          <a
+            href="https://github.com/hikingsrome/hikingsrome"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="underline underline-offset-2 hover:text-ivory/70 transition-colors"
+            aria-label="Repository GitHub di HiKingsRome (si apre in una nuova scheda)"
+          >GitHub</a>
+        </p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ════════════════════════════════════════════
+       JAVASCRIPT — vanilla, nessuna libreria esterna
+  ═════════════════════════════════════════════ -->
+  <script>
+    // Anno dinamico nel footer
+    document.getElementById('footer-year').textContent = new Date().getFullYear();
+
+    // Navbar shadow on scroll
+    const siteHeader = document.getElementById('site-header');
+    window.addEventListener('scroll', () => {
+      siteHeader.classList.toggle('nav-scrolled', window.scrollY > 10);
+    }, { passive: true });
+
+    // Mobile menu toggle
+    const menuBtn   = document.getElementById('mobile-menu-btn');
+    const mobileNav = document.getElementById('mobile-menu');
+    const iconMenu  = document.getElementById('icon-menu');
+    const iconClose = document.getElementById('icon-close');
+
+    menuBtn.addEventListener('click', () => {
+      const isOpen = mobileNav.classList.toggle('hidden') === false;
+      menuBtn.setAttribute('aria-expanded', String(isOpen));
+      iconMenu.classList.toggle('hidden', isOpen);
+      iconClose.classList.toggle('hidden', !isOpen);
+    });
+
+    // Chiudi menu al click su qualsiasi link interno
+    mobileNav.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        mobileNav.classList.add('hidden');
+        menuBtn.setAttribute('aria-expanded', 'false');
+        iconMenu.classList.remove('hidden');
+        iconClose.classList.add('hidden');
+      });
+    });
+  </script>
+
+</body>
+</html>
