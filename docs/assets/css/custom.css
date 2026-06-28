@@ -175,3 +175,137 @@ body {
     animation: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   FAQ ACCORDION
+   Spostato qui da faq.html perché il blocco <style> inline
+   viene bloccato dalla CSP (style-src 'self', no unsafe-inline).
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Categoria (label sopra gruppo domande) ──────────────── */
+.faq-category {
+  padding-top: 2.5rem;
+  padding-bottom: 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8B7355;
+}
+
+/* ── Item (riga domanda + risposta) ──────────────────────── */
+.faq-item {
+  border-bottom: 1px solid #E8E3DC;
+}
+
+/* ── Pulsante domanda ────────────────────────────────────── */
+.faq-question {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1.375rem 0;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #1C2B1A;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.faq-question:hover {
+  color: #4A6741;
+}
+.faq-question:focus-visible {
+  outline: 3px solid #8B7355;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Icona bastoncino da trekking ────────────────────────── */
+/*    Dimensione fissa 24×24 px su tutti i browser.          */
+/*    Ruota di 45° quando l'item è aperto.                   */
+.faq-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: block;
+  color: #4A6741;
+  transition: transform 0.25s ease, color 0.2s ease;
+}
+.faq-item.open .faq-icon {
+  transform: rotate(45deg);
+  color: #8B7355;
+}
+.faq-question:hover .faq-icon {
+  color: #4A6741;
+}
+
+/* ── Risposta ────────────────────────────────────────────── */
+.faq-answer {
+  display: none;
+  padding-bottom: 1.5rem;
+  color: #1C2B1A;
+  font-size: 0.9375rem;
+  line-height: 1.75;
+  opacity: 0.75;
+}
+.faq-item.open .faq-answer {
+  display: block;
+}
+
+/* ── Lista con alberelli ─────────────────────────────────── */
+.faq-answer ul {
+  margin-top: 0.75rem;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.faq-answer ul li {
+  display: flex;
+  gap: 0.625rem;
+  align-items: flex-start;
+  line-height: 1.6;
+}
+/* Alberello Unicode come bullet — visivamente in tema */
+.faq-answer ul li::before {
+  content: '🌲';
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  margin-top: 0.2rem;
+  line-height: 1;
+}
+
+/* ── Tabella difficoltà ──────────────────────────────────── */
+.diff-table {
+  width: 100%;
+  margin-top: 0.875rem;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.diff-table tr {
+  border-bottom: 1px solid #E8E3DC;
+}
+.diff-table tr:last-child {
+  border-bottom: none;
+}
+.diff-table td {
+  padding: 0.55rem 0.25rem;
+  vertical-align: top;
+}
+.diff-table td:first-child {
+  padding-right: 1rem;
+  white-space: nowrap;
+}
+.diff-badge {
+  display: inline-block;
+  padding: 0.15rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
