@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Favicon -->
+  <link rel="icon"             href="assets/images/logo.png" type="image/png" />
+  <link rel="shortcut icon"    href="assets/images/logo.png" type="image/png" />
+  <link rel="apple-touch-icon" href="assets/images/logo.png" />
+
+  <!-- CSP -->
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="
+      default-src   'none';
+      script-src    'self';
+      style-src     'self' https://fonts.googleapis.com;
+      font-src      'self' https://fonts.gstatic.com;
+      img-src       'self' data: https:;
+      connect-src   'none';
+      frame-src     'none';
+      frame-ancestors 'none';
+      base-uri      'self';
+      form-action   'none';
+    "
+  />
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="Referrer-Policy"        content="strict-origin-when-cross-origin" />
+  <meta http-equiv="Permissions-Policy"     content="geolocation=(), camera=(), microphone=()" />
+
+  <!-- SEO — noindex: page under construction -->
+  <title>Calendar – HiKingsRome | Upcoming Hikes near Rome</title>
+  <meta name="description" content="View upcoming HiKingsRome hikes near Rome. Calendar of weekend hiking trips in the Lazio countryside." />
+  <meta name="robots" content="noindex, follow" />
+  <link rel="canonical" href="https://www.hikingsrome.com/calendario.html" />
+
+  <!-- Open Graph -->
+  <meta property="og:type"        content="website" />
+  <meta property="og:url"         content="https://www.hikingsrome.com/calendario.html" />
+  <meta property="og:title"       content="Calendar – HiKingsRome | Upcoming Hikes near Rome" />
+  <meta property="og:description" content="View upcoming HiKingsRome hikes. Join Telegram for full details and sign-up." />
+  <meta property="og:image"       content="https://www.hikingsrome.com/assets/images/logo.png" />
+  <meta property="og:image:alt"   content="HiKingsRome logo: hiker with trekking pole on a mountain landscape" />
+  <meta property="og:locale"      content="en_GB" />
+  <meta property="og:site_name"   content="HiKingsRome" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600&display=swap"
+  />
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="assets/css/output.css" />
+  <link rel="stylesheet" href="assets/css/custom.css" />
+
+</head>
+
+<body class="bg-ivory text-forest antialiased">
+
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  <!-- ── NAVBAR ──────────────────────────────────────────────── -->
+  <header
+    id="site-header"
+    class="sticky top-0 z-50 bg-ivory/95 backdrop-blur-sm border-b border-sand transition-shadow duration-300"
+  >
+    <nav
+      class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16"
+      aria-label="Main navigation"
+    >
+      <a href="index.html" class="flex items-center gap-2.5 group" aria-label="HiKingsRome – back to Home">
+        <img src="assets/images/logo.png" alt="HiKingsRome logo" class="logo-navbar" width="36" height="36" loading="eager" />
+        <span class="font-display text-xl tracking-tight text-forest group-hover:text-sage transition-colors">HiKingsRome</span>
+      </a>
+
+      <ul class="hidden md:flex items-center gap-8 text-sm font-medium" role="list">
+        <li><a href="index.html"      class="text-forest/70 hover:text-sage transition-colors">Home</a></li>
+        <li><a href="progetto.html"   class="text-forest/70 hover:text-sage transition-colors">About</a></li>
+        <li><a href="calendario.html" class="text-sage border-b-2 border-sage pb-0.5" aria-current="page">Calendar</a></li>
+        <li><a href="faq.html"        class="text-forest/70 hover:text-sage transition-colors">FAQ</a></li>
+      </ul>
+
+      <a
+        href="https://t.me/hikingsrome"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="btn-primary hidden md:inline-flex px-4 py-2 text-sm"
+        aria-label="Join HiKingsRome on Telegram (opens in a new tab)"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.15.67-.54.834-1.094.518l-3.02-2.226-1.457 1.402c-.162.162-.297.297-.608.297l.216-3.08 5.596-5.056c.243-.216-.054-.336-.378-.12L6.93 14.4 3.95 13.49c-.648-.202-.66-.648.135-.96l10.8-4.164c.54-.195 1.012.12.677.882z"/>
+        </svg>
+        Telegram
+      </a>
+
+      <button id="mobile-menu-btn" type="button" class="md:hidden p-2 rounded-md text-forest hover:bg-sand transition-colors" aria-expanded="false" aria-controls="mobile-menu" aria-label="Open navigation menu">
+        <svg id="icon-menu" width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="3" y1="6"  x2="19" y2="6"/><line x1="3" y1="11" x2="19" y2="11"/><line x1="3" y1="16" x2="19" y2="16"/>
+        </svg>
+        <svg id="icon-close" width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="hidden" aria-hidden="true">
+          <line x1="4" y1="4" x2="18" y2="18"/><line x1="18" y1="4" x2="4" y2="18"/>
+        </svg>
+      </button>
+    </nav>
+
+    <div id="mobile-menu" class="hidden md:hidden bg-ivory border-t border-sand" role="navigation" aria-label="Mobile navigation">
+      <ul class="flex flex-col px-4 py-4 gap-4 text-sm font-medium" role="list">
+        <li><a href="index.html"      class="block text-forest/70 hover:text-sage transition-colors">Home</a></li>
+        <li><a href="progetto.html"   class="block text-forest/70 hover:text-sage transition-colors">About</a></li>
+        <li><a href="calendario.html" class="block text-sage font-semibold" aria-current="page">Calendar</a></li>
+        <li><a href="faq.html"        class="block text-forest/70 hover:text-sage transition-colors">FAQ</a></li>
+        <li class="pt-2 border-t border-sand">
+          <a href="https://t.me/hikingsrome" target="_blank" rel="noopener noreferrer" class="btn-primary px-4 py-2 text-sm" aria-label="Join on Telegram (opens in a new tab)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.15.67-.54.834-1.094.518l-3.02-2.226-1.457 1.402c-.162.162-.297.297-.608.297l.216-3.08 5.596-5.056c.243-.216-.054-.336-.378-.12L6.93 14.4 3.95 13.49c-.648-.202-.66-.648.135-.96l10.8-4.164c.54-.195 1.012.12.677.882z"/>
+            </svg>
+            Join on Telegram
+          </a>
+        </li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- ── MAIN ────────────────────────────────────────────────── -->
+  <main id="main-content">
+    <div class="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 sm:px-6 lg:px-8 py-20">
+      <div class="max-w-lg w-full text-center">
+
+        <!-- Illustration -->
+        <div class="mb-10 flex justify-center">
+          <img
+            src="assets/images/calendar-wip.png"
+            alt="A calendar with a checkmark surrounded by trees and binoculars, in a natural outdoor setting"
+            width="300"
+            height="240"
+            class="w-72 sm:w-80 h-auto drop-shadow-sm"
+            loading="eager"
+            onerror="this.style.display='none'"
+          />
+        </div>
+
+        <!-- Eyebrow -->
+        <p class="text-earth text-xs font-semibold uppercase tracking-widest mb-4">
+          Coming soon
+        </p>
+
+        <!-- Heading -->
+        <h1 class="font-display text-4xl sm:text-5xl text-forest mb-5 leading-tight">
+          The dates are set.<br />
+          <em class="not-italic text-sage">The page isn't — yet.</em>
+        </h1>
+
+        <!-- Body -->
+        <p class="text-forest/65 text-base leading-relaxed mb-3 max-w-sm mx-auto">
+          All upcoming hikes are already live on Telegram. Join the group to see
+          what's coming, sign up for the ones you like, and sort out the lift.
+        </p>
+        <p class="text-forest/45 text-sm mb-10">
+          We hike every weekend. There's almost certainly one this Saturday.
+        </p>
+
+        <!-- Upcoming hikes teaser — simple pill list -->
+        <div class="mb-10 inline-flex flex-col gap-2 text-left">
+          <div class="flex items-center gap-3 bg-white rounded-full px-5 py-2.5 shadow-sm text-sm">
+            <span class="text-sage font-semibold whitespace-nowrap">Sat 5 Jul</span>
+            <span class="text-forest/60">Lake Nemi &amp; the Rediscovered Forest</span>
+            <span class="ml-auto text-xs font-medium text-white bg-forest rounded-full px-2.5 py-0.5 whitespace-nowrap">Easy</span>
+          </div>
+          <div class="flex items-center gap-3 bg-white rounded-full px-5 py-2.5 shadow-sm text-sm">
+            <span class="text-sage font-semibold whitespace-nowrap">Sun 13 Jul</span>
+            <span class="text-forest/60">Monte Artemisio &amp; Via Sacra</span>
+            <span class="ml-auto text-xs font-medium text-white bg-earth rounded-full px-2.5 py-0.5 whitespace-nowrap">Moderate</span>
+          </div>
+          <div class="flex items-center gap-3 bg-white rounded-full px-5 py-2.5 shadow-sm text-sm">
+            <span class="text-sage font-semibold whitespace-nowrap">Sat 19 Jul</span>
+            <span class="text-forest/60">Monti Lepini: Semprevisa Summit</span>
+            <span class="ml-auto text-xs font-medium text-white bg-sage rounded-full px-2.5 py-0.5 whitespace-nowrap">Challenging</span>
+          </div>
+          <p class="text-center text-forest/35 text-xs pt-1">
+            + more on Telegram →
+          </p>
+        </div>
+
+        <!-- CTA -->
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+          <a
+            href="https://t.me/hikingsrome"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-primary px-6 py-3 text-base"
+            aria-label="See all hikes on Telegram (opens in a new tab)"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.15.67-.54.834-1.094.518l-3.02-2.226-1.457 1.402c-.162.162-.297.297-.608.297l.216-3.08 5.596-5.056c.243-.216-.054-.336-.378-.12L6.93 14.4 3.95 13.49c-.648-.202-.66-.648.135-.96l10.8-4.164c.54-.195 1.012.12.677.882z"/>
+            </svg>
+            See all hikes on Telegram
+          </a>
+          <a href="faq.html#faq-how-join" class="btn-outline px-6 py-3 text-base">
+            How does it work?
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- ── FOOTER ───────────────────────────────────────────────── -->
+  <footer class="bg-forest text-ivory/80" role="contentinfo">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid sm:grid-cols-2 md:grid-cols-3 gap-10">
+      <div>
+        <div class="flex items-center gap-2.5 mb-4">
+          <img src="assets/images/logo.png" alt="HiKingsRome logo" class="logo-footer" width="32" height="32" loading="lazy" />
+          <span class="font-display text-lg text-ivory">HiKingsRome</span>
+        </div>
+        <p class="text-ivory/55 text-sm leading-relaxed max-w-xs">
+          A free hiking community exploring the landscapes around Rome. Every weekend, no fees.
+        </p>
+      </div>
+      <nav aria-label="Footer navigation">
+        <h2 class="text-ivory text-sm font-semibold mb-4 uppercase tracking-wider">Pages</h2>
+        <ul class="flex flex-col gap-3 text-sm" role="list">
+          <li><a href="index.html"      class="hover:text-ivory transition-colors">Home</a></li>
+          <li><a href="progetto.html"   class="hover:text-ivory transition-colors">About</a></li>
+          <li><a href="calendario.html" class="hover:text-ivory transition-colors">Calendar</a></li>
+          <li><a href="faq.html"        class="hover:text-ivory transition-colors">FAQ</a></li>
+        </ul>
+      </nav>
+      <div>
+        <h2 class="text-ivory text-sm font-semibold mb-4 uppercase tracking-wider">Follow us</h2>
+        <ul class="flex flex-col gap-3 text-sm" role="list">
+          <li>
+            <a href="https://t.me/hikingsrome" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2.5 hover:text-ivory transition-colors" aria-label="HiKingsRome Telegram channel (opens in a new tab)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.15.67-.54.834-1.094.518l-3.02-2.226-1.457 1.402c-.162.162-.297.297-.608.297l.216-3.08 5.596-5.056c.243-.216-.054-.336-.378-.12L6.93 14.4 3.95 13.49c-.648-.202-.66-.648.135-.96l10.8-4.164c.54-.195 1.012.12.677.882z"/></svg>
+              Telegram
+            </a>
+          </li>
+          <li>
+            <a href="https://www.instagram.com/hikingsrome" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2.5 hover:text-ivory transition-colors" aria-label="HiKingsRome Instagram profile (opens in a new tab)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
+              Instagram
+            </a>
+          </li>
+          <li>
+            <a href="https://www.komoot.com/it-it/user/3261856743261" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2.5 hover:text-ivory transition-colors" aria-label="HiKingsRome on Komoot (opens in a new tab)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 4l4 4-4 4-4-4 4-4zm0 10l-4-4h8l-4 4z"/></svg>
+              Komoot
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+    <div class="border-t border-white/10">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-ivory/40">
+        <p>© <span id="footer-year"></span> HiKingsRome. All rights reserved.</p>
+        <p>Open source on <a href="https://github.com/montanarisimone/HiKingsRome" target="_blank" rel="noopener noreferrer" class="underline underline-offset-2 hover:text-ivory/70 transition-colors" aria-label="HiKingsRome GitHub repository (opens in a new tab)">GitHub</a></p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/main.js" defer></script>
+
+</body>
+</html>
