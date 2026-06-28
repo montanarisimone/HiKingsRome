@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'        # Node LTS corrente — elimina i warning
           cache: 'npm'
 
       - name: Install dependencies
@@ -47,7 +47,7 @@ jobs:
           BYTES=$(wc -c < ./docs/assets/css/output.css)
           echo "✅ output.css: ${BYTES} bytes"
           if [ "$BYTES" -lt 1000 ]; then
-            echo "⚠️  WARNING: file troppo piccolo, verifica tailwind.config.js content paths"
+            echo "⚠️  WARNING: file troppo piccolo — verifica tailwind.config.js content paths"
           fi
 
       - name: Setup Pages
