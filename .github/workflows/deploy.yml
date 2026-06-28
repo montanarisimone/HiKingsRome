@@ -25,17 +25,30 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Tailwind CSS static file
+      - name: Build Tailwind CSS
         run: |
-          npx tailwindcss \
+          ./node_modules/.bin/tailwindcss \
             --config ./tailwind.config.js \
             -i ./docs/assets/css/input.css \
             -o ./docs/assets/css/output.css \
             --minify
+
+      - name: Verify build output
+        run: |
+          if [ ! -f ./docs/assets/css/output.css ]; then
+            echo "❌ ERRORE: output.css non trovato"
+            exit 1
+          fi
+          BYTES=$(wc -c < ./docs/assets/css/output.css)
+          echo "✅ output.css: ${BYTES} bytes"
+          if [ "$BYTES" -lt 1000 ]; then
+            echo "⚠️  WARNING: file troppo piccolo, verifica tailwind.config.js content paths"
+          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
