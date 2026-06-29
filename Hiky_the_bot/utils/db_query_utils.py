@@ -8,7 +8,10 @@ import os
 import re
 import time
 import threading
+import logging
 from functools import wraps
+
+logger = logging.getLogger(__name__)
 
 # Configurable query timeout (in seconds)
 QUERY_TIMEOUT = 5
@@ -43,16 +46,20 @@ def timeout(seconds):
         return wrapper
     return decorator
 
+_DATA_DIR = os.environ.get(
+    'HIKY_DATA_DIR',
+    os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+)
+
 class DBQueryUtils:
     """Utility class for executing database queries for admin purposes"""
-    
-    # File per salvare le query predefinite
-    CUSTOM_QUERIES_FILE = 'admin_custom_queries.json'
-    
+
+    CUSTOM_QUERIES_FILE = os.path.join(_DATA_DIR, 'admin_custom_queries.json')
+
     @staticmethod
     def get_connection():
         """Get a connection to the SQLite database"""
-        db_path = 'hiky_bot.db'
+        db_path = os.path.join(_DATA_DIR, 'hiky_bot.db')
         if not os.path.exists(db_path):
             raise FileNotFoundError(f"Database file {db_path} not found.")
         
@@ -63,28 +70,33 @@ class DBQueryUtils:
     
     @staticmethod
     def is_select_query(query):
-        """Check that the query is of type SELECT and contains no other DML operations"""
-        # Rimuovi commenti e spazi bianchi per una migliore analisi
-        clean_query = re.sub(r'--.*?\n', ' ', query)
+        """Check that the query is a plain SELECT with no dangerous operations."""
+        # Strip single-line comments (-- ...\n) and end-of-string comments (-- ...)
+        clean_query = re.sub(r'--[^\n]*', ' ', query)
+        # Strip block comments (/* ... */)
         clean_query = re.sub(r'/\*.*?\*/', ' ', clean_query, flags=re.DOTALL)
         clean_query = clean_query.strip().lower()
-        
-        # Verifica che inizi con SELECT
+
+        # Must start with SELECT
         if not clean_query.startswith('select'):
             return False
-        
-        # Verifica che non contenga parole chiave DML proibite
+
+        # Block stacked queries — a semicolon could introduce a second statement
+        if ';' in clean_query:
+            return False
+
+        # Block dangerous keywords (DML, DDL, admin commands, data exfiltration helpers)
         forbidden_keywords = [
-            'insert', 'update', 'delete', 'drop', 'alter', 'create', 
-            'pragma', 'attach', 'detach', 'vacuum'
+            'insert', 'update', 'delete', 'drop', 'alter', 'create',
+            'pragma', 'attach', 'detach', 'vacuum', 'union', 'into',
+            'savepoint', 'rollback', 'commit', 'begin', 'reindex',
+            'replace', 'with',
         ]
-        
-        # Pattern per individuare parole intere
+
         for keyword in forbidden_keywords:
-            pattern = r'\b' + keyword + r'\b'
-            if re.search(pattern, clean_query):
+            if re.search(r'\b' + keyword + r'\b', clean_query):
                 return False
-        
+
         return True
     
     @staticmethod
@@ -136,9 +148,10 @@ class DBQueryUtils:
             }
         
         except sqlite3.Error as e:
+            logger.error(f"SQLite error in execute_query: {e}")
             return {
                 'success': False,
-                'error': f"SQLite error: {str(e)}"
+                'error': "Query execution failed. Check the query syntax and try again."
             }
         finally:
             if conn:
