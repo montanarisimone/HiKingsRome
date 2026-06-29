@@ -9,8 +9,13 @@ import pytz
 import logging
 import math
 
-# Database file path
-DB_PATH = 'hiky_bot.db'
+# Data directory: override with HIKY_DATA_DIR env var (used by Docker).
+# Default: parent of this file (Hiky_the_bot/) — same behaviour as before for local runs.
+_DATA_DIR = os.environ.get(
+    'HIKY_DATA_DIR',
+    os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+)
+DB_PATH = os.path.join(_DATA_DIR, 'hiky_bot.db')
 
 # Rome timezone for consistent timestamps
 rome_tz = pytz.timezone('Europe/Rome')
@@ -24,7 +29,26 @@ logger = logging.getLogger(__name__)
 
 class DBUtils:
     """Utility class for database operations"""
-    
+
+    @staticmethod
+    def ensure_indexes():
+        """Create performance indexes if they don't exist. Safe to call on every startup."""
+        conn = DBUtils.get_connection()
+        cursor = conn.cursor()
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_reg_hike_id      ON registrations(hike_id)",
+            "CREATE INDEX IF NOT EXISTS idx_reg_telegram_id  ON registrations(telegram_id)",
+            "CREATE INDEX IF NOT EXISTS idx_hike_date        ON hikes(hike_date)",
+            "CREATE INDEX IF NOT EXISTS idx_hike_is_active   ON hikes(is_active)",
+            "CREATE INDEX IF NOT EXISTS idx_att_hike_id      ON attendance(hike_id)",
+            "CREATE INDEX IF NOT EXISTS idx_att_telegram_id  ON attendance(telegram_id)",
+        ]
+        for sql in indexes:
+            cursor.execute(sql)
+        conn.commit()
+        conn.close()
+        logger.info("DB indexes verified.")
+
     @staticmethod
     def get_connection():
         """Get a connection to the SQLite database"""
@@ -442,8 +466,8 @@ class DBUtils:
             WHERE id = ?
             """
             
-            logger.info(f"Update Query: {query}")
-            logger.info(f"Parameters: {params}")
+            logger.debug(f"Update Query: {query}")
+            logger.debug(f"Parameters: {params}")
 
             cursor.execute(query, params)
             
