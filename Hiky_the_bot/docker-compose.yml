@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  hiky-bot:
+    build: .
+    container_name: hiky_bot
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # Docker creates these directories automatically if they don't exist.
+      # All persistent data lives in ./data — survives restarts and image rebuilds.
+      - ./data:/app/data
+      - ./backups:/app/backups
+      - ./logs:/app/logs
