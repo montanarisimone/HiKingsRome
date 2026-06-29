@@ -1,8 +1,11 @@
 # Copyright © 2025 Simone Montanari. All Rights Reserved.
 # This file is part of HiKingsRome and may not be used or distributed without written permission.
 
+import os
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from datetime import datetime
+
+GROUP_INVITE_LINK = os.environ.get('TELEGRAM_INVITE_LINK', 'https://t.me/+dku6thBDTGM0MWZk')
 
 class KeyboardBuilder:
     @staticmethod
@@ -87,7 +90,7 @@ class KeyboardBuilder:
         keyboard = [
             [InlineKeyboardButton("🌐 Website", url="https://www.hikingsrome.com/")],
             [InlineKeyboardButton("📸 Instagram", url="https://www.instagram.com/hikingsrome/")],
-            [InlineKeyboardButton("💬 Telegram Group", url="https://t.me/+dku6thBDTGM0MWZk")],
+            [InlineKeyboardButton("💬 Telegram Group", url=GROUP_INVITE_LINK)],
             [InlineKeyboardButton("🗺 Komoot", url="https://www.komoot.com/it-it/user/3261856743261")],
             [InlineKeyboardButton("🔙 Back to menu", callback_data='back_to_menu')]
         ]
