@@ -15,11 +15,9 @@ import json
 import logging
 import sqlite3
 import re
-import threading
 import math
 from datetime import datetime, date, timedelta
 from datetime import time as datetime_time
-from functools import wraps
 import pytz
 import requests
 from dotenv import load_dotenv
@@ -35,7 +33,7 @@ from telegram.ext import (
 
 # Local imports
 from utils.db_utils import DBUtils
-from utils.db_keyboards import KeyboardBuilder
+from utils.db_keyboards import KeyboardBuilder, GROUP_INVITE_LINK
 from utils.rate_limiter import RateLimiter
 from utils.weather_utils import WeatherUtils
 from utils.db_query_utils import DBQueryUtils,TimeoutError
@@ -88,6 +86,15 @@ municipi_data = {
     'XV': ['La Storta', 'Cesano', 'Prima Porta']
 }
 
+def _get_user_role(user_id):
+    """Return (is_admin, is_guide) for user_id with a single profile fetch."""
+    is_admin = DBUtils.check_is_admin(user_id)
+    if is_admin:
+        return True, True
+    profile = DBUtils.get_user_profile(user_id) or {}
+    return False, bool(profile.get('is_guide', False))
+
+
 def check_user_membership(update, context):
     """Check if a user is a member of the private group"""
     PRIVATE_GROUP_ID = os.environ.get('TELEGRAM_GROUP_ID')
@@ -118,7 +125,6 @@ def check_user_membership(update, context):
 
 def handle_non_member(update, context):
     """Handle users who are not members of the group"""
-    GROUP_INVITE_LINK = "https://t.me/+dku6thBDTGM0MWZk"
     keyboard = [[InlineKeyboardButton("Join the Group", url=GROUP_INVITE_LINK)]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     message_text = (
@@ -1789,7 +1795,7 @@ def handle_post_hike_actions(context):
             guide_fee = fee_result.get('guide_fee', 0)
             
             # Lock fees
-            DBUtils.lock_fees(hike_id, context.bot.id, participant_fee, guide_fee)
+            lock_result = DBUtils.lock_fees(hike_id, context.bot.id, participant_fee, guide_fee)
 
             if lock_result['success']:
                 # Send notifications to participants
@@ -5449,8 +5455,7 @@ def show_hike_signup_details(update, context, hike_id):
 
     # Check if user is admin/guide for fee display
     user_id = update.effective_user.id
-    is_admin = DBUtils.check_is_admin(user_id)
-    is_guide = is_admin or (DBUtils.get_user_profile(user_id) or {}).get('is_guide', False)
+    is_admin, is_guide = _get_user_role(user_id)
     
     # Get fee information
     if hike['fee_locked']:
@@ -5524,9 +5529,8 @@ def show_hike_details(update, context):
         user_id = update.from_user.id
     else:
         user_id = update.message.from_user.id
-        
-    is_admin = DBUtils.check_is_admin(user_id)
-    is_guide = is_admin or (DBUtils.get_user_profile(user_id) or {}).get('is_guide', False)
+
+    is_admin, is_guide = _get_user_role(user_id)
     
     # Get fee information
     fee_info = ""
@@ -5681,8 +5685,7 @@ def show_hike_calendar(update, context):
             difficulty = f" - {hike['difficulty']}" if hike.get('difficulty') else ""
 
             # Get fee information
-            is_admin = DBUtils.check_is_admin(user_id)
-            is_guide = is_admin or (DBUtils.get_user_profile(user_id) or {}).get('is_guide', False)
+            is_admin, is_guide = _get_user_role(user_id)
 
             # Calculate the most up-to-date fee
             fee_info = ""
@@ -5953,8 +5956,7 @@ def save_medical(update, context):
     # Get available hikes
     available_hikes = context.user_data['available_hikes']
     user_id = update.effective_user.id
-    is_admin = DBUtils.check_is_admin(user_id)
-    is_guide = is_admin or (DBUtils.get_user_profile(user_id) or {}).get('is_guide', False)
+    is_admin, is_guide = _get_user_role(user_id)
 
     # Create fee information message for each hike
     fee_info_message = "💰 *Fee Information*\n\n"
@@ -6523,6 +6525,9 @@ def main():
     if not TOKEN:
         logger.error("No TELEGRAM_TOKEN provided in environment variables")
         sys.exit(1)
+
+    # Ensure DB indexes exist (no-op if already present)
+    DBUtils.ensure_indexes()
         
     # Setup request parameters
     request_kwargs = {
