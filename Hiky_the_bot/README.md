@@ -77,7 +77,7 @@ logs/       # Application logs (mounted volume)
 
 ## Roadmap
 
-See [ROADMAP.md](Hiky_the_bot/ROADMAP.md) for planned features, work in progress, and known issues.
+See [ROADMAP.md](ROADMAP.md) for planned features, work in progress, and known issues.
 
 ## Credits
 
