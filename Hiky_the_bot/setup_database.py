@@ -7,8 +7,13 @@ import os
 import sys
 from datetime import datetime
 
-# Database file path
-DB_PATH = 'hiky_bot.db'
+# Data directory: override with HIKY_DATA_DIR env var (used by Docker).
+# Default: same directory as this script (Hiky_the_bot/).
+_DATA_DIR = os.environ.get(
+    'HIKY_DATA_DIR',
+    os.path.dirname(os.path.abspath(__file__))
+)
+DB_PATH = os.path.join(_DATA_DIR, 'hiky_bot.db')
 
 def setup_database():
     """Create and initialize the database with required tables"""
@@ -159,6 +164,18 @@ def setup_database():
     )
     ''')
     
+    # Create performance indexes
+    indexes = [
+        "CREATE INDEX IF NOT EXISTS idx_reg_hike_id      ON registrations(hike_id)",
+        "CREATE INDEX IF NOT EXISTS idx_reg_telegram_id  ON registrations(telegram_id)",
+        "CREATE INDEX IF NOT EXISTS idx_hike_date        ON hikes(hike_date)",
+        "CREATE INDEX IF NOT EXISTS idx_hike_is_active   ON hikes(is_active)",
+        "CREATE INDEX IF NOT EXISTS idx_att_hike_id      ON attendance(hike_id)",
+        "CREATE INDEX IF NOT EXISTS idx_att_telegram_id  ON attendance(telegram_id)",
+    ]
+    for sql in indexes:
+        cursor.execute(sql)
+
     # Insert default costs if they don't exist
     default_costs = [
         ('Domain', 15.0, 'yearly', 'Domain name registration'),
