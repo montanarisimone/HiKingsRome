@@ -1,8 +1,11 @@
 # Copyright © 2025 Simone Montanari. All Rights Reserved.
 # This file is part of HiKingsRome and may not be used or distributed without written permission.
 
+import logging
 import requests
 from datetime import datetime, date, timedelta
+
+logger = logging.getLogger(__name__)
 
 class WeatherUtils:
     """Utility class for weather-related operations"""
@@ -45,7 +48,7 @@ class WeatherUtils:
             
             response = requests.get(url, params=params, timeout=10)
             if response.status_code != 200:
-                print(f"Weather API error: {response.status_code} - {response.text}")
+                logger.error(f"Weather API error: {response.status_code} - {response.text}")
                 return None
                 
             data = response.json()
@@ -84,7 +87,7 @@ class WeatherUtils:
             }
 
         except Exception as e:
-            print(f"Error getting weather forecast: {e}")
+            logger.error(f"Error getting weather forecast: {e}")
             return None
     
     @staticmethod
